@@ -62,20 +62,20 @@ const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
       { key: "turbulence", label: "Warp" },
       { key: "attract", label: "Filament" },
       { key: "bloom", label: "Glow" },
-      { key: "colorCycle", label: "Color cycle" },
+      { key: "colorCycle", label: "Color flow" },
     ],
     skeleton: true,
     depthColor: false,
   },
   particles: {
-    sliders: [...PARTICLE_SLIDERS, { key: "colorCycle", label: "Color cycle" }],
+    sliders: [...PARTICLE_SLIDERS, { key: "colorCycle", label: "Color flow" }],
     skeleton: true,
     depthColor: false,
   },
   constellation: {
     sliders: [
       { key: "bloom", label: "Glow" },
-      { key: "colorCycle", label: "Color cycle" },
+      { key: "colorCycle", label: "Color flow" },
     ],
     skeleton: false,
     depthColor: true,
@@ -83,7 +83,7 @@ const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
   neon: {
     sliders: [
       { key: "bloom", label: "Glow" },
-      { key: "colorCycle", label: "Color cycle" },
+      { key: "colorCycle", label: "Color flow" },
     ],
     skeleton: false,
     depthColor: true,
@@ -93,7 +93,7 @@ const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
       { key: "particleSize", label: "Thickness" },
       { key: "trailFade", label: "Fade" },
       { key: "bloom", label: "Glow" },
-      { key: "colorCycle", label: "Color cycle" },
+      { key: "colorCycle", label: "Color flow" },
     ],
     skeleton: true,
     depthColor: true,
@@ -107,7 +107,7 @@ const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
       { key: "gravity", label: "Gravity" },
       { key: "turbulence", label: "Drift" },
       { key: "trailFade", label: "Fade" },
-      { key: "colorCycle", label: "Color cycle" },
+      { key: "colorCycle", label: "Color flow" },
     ],
     skeleton: true,
     depthColor: false,
@@ -116,25 +116,25 @@ const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
     sliders: [
       ...PARTICLE_SLIDERS,
       { key: "trailFade", label: "Fade" },
-      { key: "colorCycle", label: "Color cycle" },
+      { key: "colorCycle", label: "Color flow" },
     ],
     skeleton: true,
     depthColor: false,
   },
   aura: {
-    sliders: [...PARTICLE_SLIDERS, { key: "colorCycle", label: "Color cycle" }],
+    sliders: [...PARTICLE_SLIDERS, { key: "colorCycle", label: "Color flow" }],
     skeleton: true,
     depthColor: false,
   },
   kaleido: {
-    sliders: [...PARTICLE_SLIDERS, { key: "colorCycle", label: "Color cycle" }],
+    sliders: [...PARTICLE_SLIDERS, { key: "colorCycle", label: "Color flow" }],
     skeleton: true,
     depthColor: false,
   },
   pixels: {
     sliders: [
       { key: "turbulence", label: "Wobble" },
-      { key: "colorCycle", label: "Color cycle" },
+      { key: "colorCycle", label: "Color flow" },
     ],
     skeleton: true,
     depthColor: false,
@@ -147,7 +147,7 @@ const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
       { key: "turbulence", label: "Wobble" },
       { key: "attract", label: "Cling" },
       { key: "bloom", label: "Shine" },
-      { key: "colorCycle", label: "Color cycle" },
+      { key: "colorCycle", label: "Color flow" },
     ],
     skeleton: true,
     depthColor: false,
@@ -155,7 +155,7 @@ const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
   metaballs: {
     sliders: [
       { key: "particleSize", label: "Blob size" },
-      { key: "colorCycle", label: "Color cycle" },
+      { key: "colorCycle", label: "Color flow" },
     ],
     skeleton: true,
     depthColor: true,
@@ -205,14 +205,11 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
             ${PALETTE_IDS.map((id) => `<option value="${id}" ${settings.palette === id ? "selected" : ""}>${PALETTES[id].name}</option>`).join("")}
           </select>
         </label>
+        ${settings.palette === "rainbow" && !settings.useCustomColors ? `<p class="hint-inline">Rainbow slowly fades through the spectrum. Color flow below sets the speed.</p>` : ""}
         <div class="checks">
           <label><input type="checkbox" data-bool="useCustomColors" ${settings.useCustomColors ? "checked" : ""}/> Custom colors</label>
         </div>
-        ${settings.useCustomColors ? `<div class="color-row">
-          <label>Primary <input type="color" data-key="customPrimary" value="${settings.customPrimary}"/></label>
-          <label>Secondary <input type="color" data-key="customSecondary" value="${settings.customSecondary}"/></label>
-          <label>Background <input type="color" data-key="customBackground" value="${settings.customBackground}"/></label>
-        </div>` : ""}
+        ${settings.useCustomColors ? customColorFields(settings) : ""}
       </section>
       <section class="group">
         <h3>${EFFECT_LABELS[settings.mode]}</h3>
@@ -244,7 +241,6 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
         </label>
         <div class="checks">
           <label><input type="checkbox" data-bool="showHud" ${settings.showHud ? "checked" : ""}/> HUD</label>
-          <label><input type="checkbox" data-bool="gestures" ${settings.gestures ? "checked" : ""}/> Body gestures</label>
           <label><input type="checkbox" data-bool="audioReactive" ${settings.audioReactive ? "checked" : ""}/> Audio-reactive glow</label>
           <label><input type="checkbox" data-bool="autoRotate" ${settings.autoRotate ? "checked" : ""}/> Auto-rotate effects</label>
         </div>
@@ -273,7 +269,16 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
     const bool = t.getAttribute("data-bool") as keyof Settings | null;
     if (bool && t instanceof HTMLInputElement) {
       (settings as unknown as Record<string, unknown>)[bool] = t.checked;
-      if (bool === "useCustomColors" || bool === "autoRotate") render();
+      if (bool === "useCustomColors" || bool === "customColorFlow" || bool === "autoRotate") render();
+      handlers.onChange();
+      return;
+    }
+    const stop = t.getAttribute("data-stop");
+    if (stop !== null && t instanceof HTMLInputElement) {
+      const i = Number(stop);
+      if (Number.isInteger(i) && i >= 0 && i < settings.customStops.length) {
+        settings.customStops = settings.customStops.map((hex, idx) => (idx === i ? t.value : hex));
+      }
       handlers.onChange();
       return;
     }
@@ -295,12 +300,28 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
       } else {
         (settings as unknown as Record<string, unknown>)[key] = v;
       }
-      if (key === "background") render();
+      if (key === "background" || key === "palette") render();
     }
     handlers.onChange();
   });
 
   root.addEventListener("click", (e) => {
+    const addStop = (e.target as HTMLElement).closest("[data-stop-add]") as HTMLElement | null;
+    if (addStop) {
+      if (settings.customStops.length < 6) {
+        settings.customStops = [...settings.customStops, settings.customPrimary];
+        render();
+        handlers.onChange();
+      }
+      return;
+    }
+    const removeStop = (e.target as HTMLElement).closest("[data-stop-remove]") as HTMLElement | null;
+    if (removeStop) {
+      settings.customStops = settings.customStops.slice(0, -1);
+      render();
+      handlers.onChange();
+      return;
+    }
     const btn = (e.target as HTMLElement).closest("[data-look]") as HTMLElement | null;
     if (!btn) return;
     applyLookPreset(settings, btn.dataset.look ?? "");
@@ -309,6 +330,33 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
   });
 
   return { refresh: render };
+}
+
+function customColorFields(settings: Settings): string {
+  const stops = settings.customStops ?? [];
+  return `
+    <div class="color-row">
+      <label>Primary <input type="color" data-key="customPrimary" value="${settings.customPrimary}"/></label>
+      <label>Secondary <input type="color" data-key="customSecondary" value="${settings.customSecondary}"/></label>
+      <label>Outline <input type="color" data-key="customGlowA" value="${settings.customGlowA}"/></label>
+      <label>Accent <input type="color" data-key="customGlowB" value="${settings.customGlowB}"/></label>
+      <label>Background <input type="color" data-key="customBackground" value="${settings.customBackground}"/></label>
+    </div>
+    <p class="hint-inline">Outline and accent cover Liquid Body’s rim and glow, plus highlights in the other effects.</p>
+    <div class="checks">
+      <label><input type="checkbox" data-bool="customColorFlow" ${settings.customColorFlow ? "checked" : ""}/> Flow through these colors</label>
+    </div>
+    ${settings.customColorFlow ? `
+      <p class="hint-inline">Slowly fades through primary, secondary, outline, and accent. Color flow below sets the speed. Add more stops if you want a longer loop.</p>
+      <div class="color-row">
+        ${stops.map((hex, i) => `<label>Extra ${i + 1} <input type="color" data-stop="${i}" value="${hex}"/></label>`).join("")}
+      </div>
+      <div class="preset-row">
+        <button type="button" class="chip" data-stop-add ${stops.length >= 6 ? "disabled" : ""}>Add color</button>
+        ${stops.length ? `<button type="button" class="chip" data-stop-remove>Remove</button>` : ""}
+      </div>
+    ` : ""}
+  `;
 }
 
 function slider(label: string, key: string, value: number, range: { min: number; max: number; step: number }): string {

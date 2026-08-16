@@ -1,5 +1,5 @@
 import type { PaletteId, Settings } from "../types";
-import { hexToRgb, hueShift, mixRgb, type RGB } from "../math";
+import { hexToRgb, hslToRgb, hueShift, mixRgb, rgbToHex, type RGB } from "../math";
 
 export interface Palette {
   id: PaletteId;
@@ -84,6 +84,15 @@ export const PALETTES: Record<PaletteId, Palette> = {
     glowB: "#4D8DFF",
     background: "#031018",
   },
+  rainbow: {
+    id: "rainbow",
+    name: "Rainbow",
+    primary: "#FF4D6D",
+    secondary: "#4D9FFF",
+    glowA: "#FFE14D",
+    glowB: "#B14DFF",
+    background: "#08060F",
+  },
 };
 
 export interface ActiveColors {
@@ -98,19 +107,39 @@ export interface ActiveColors {
 }
 
 export function resolveColors(settings: Settings, timeSec: number): ActiveColors {
-  const base = PALETTES[settings.palette];
-  let primary = hexToRgb(settings.useCustomColors ? settings.customPrimary : base.primary);
-  let secondary = hexToRgb(settings.useCustomColors ? settings.customSecondary : base.secondary);
-  let glowA = hexToRgb(base.glowA);
-  let glowB = hexToRgb(base.glowB);
-  let background = hexToRgb(settings.useCustomColors ? settings.customBackground : base.background);
+  const base = PALETTES[settings.palette] ?? PALETTES.aurora;
+  const custom = settings.useCustomColors;
+  let primary = hexToRgb(custom ? settings.customPrimary : base.primary);
+  let secondary = hexToRgb(custom ? settings.customSecondary : base.secondary);
+  let glowA = hexToRgb(custom ? settings.customGlowA : base.glowA);
+  let glowB = hexToRgb(custom ? settings.customGlowB : base.glowB);
+  let background = hexToRgb(custom ? settings.customBackground : base.background);
 
-  if (settings.colorCycle > 0) {
+  const flowStops = custom ? customFlowStops(settings) : [];
+  const rainbow = settings.palette === "rainbow" && !custom;
+  const flowing = rainbow || (custom && settings.customColorFlow && flowStops.length >= 2);
+
+  if (flowing) {
+    const speed = 0.012 + settings.colorCycle * 0.038;
+    const t = timeSec * speed;
+    if (rainbow) {
+      primary = rainbowHue(t * 360);
+      secondary = rainbowHue(t * 360 + 72);
+      glowA = rainbowHue(t * 360 + 28, 0.9, 0.64);
+      glowB = rainbowHue(t * 360 + 118, 0.88, 0.6);
+      background = mixRgb(hexToRgb(base.background), rainbowHue(t * 360 + 200, 0.35, 0.08), 0.55);
+    } else {
+      primary = sampleStops(flowStops, t);
+      secondary = sampleStops(flowStops, t + 0.25);
+      glowA = sampleStops(flowStops, t + 0.08);
+      glowB = sampleStops(flowStops, t + 0.42);
+    }
+  } else if (settings.colorCycle > 0) {
     const deg = (timeSec * settings.colorCycle * 28) % 360;
     primary = hueShift(primary, deg);
     secondary = hueShift(secondary, deg + 40);
-    glowA = hueShift(glowA, deg);
-    glowB = hueShift(glowB, deg + 40);
+    glowA = hueShift(glowA, deg + 12);
+    glowB = hueShift(glowB, deg + 52);
   }
 
   return {
@@ -119,10 +148,46 @@ export function resolveColors(settings: Settings, timeSec: number): ActiveColors
     glowA,
     glowB,
     background,
-    primaryHex: settings.useCustomColors ? settings.customPrimary : base.primary,
-    secondaryHex: settings.useCustomColors ? settings.customSecondary : base.secondary,
-    backgroundHex: settings.useCustomColors ? settings.customBackground : base.background,
+    primaryHex: rgbToHex(primary),
+    secondaryHex: rgbToHex(secondary),
+    backgroundHex: rgbToHex(background),
   };
+}
+
+function rainbowHue(deg: number, s = 0.86, l = 0.58): RGB {
+  return hslToRgb({ h: ((deg % 360) + 360) % 360, s, l });
+}
+
+function customFlowStops(settings: Settings): RGB[] {
+  const hexes = [
+    settings.customPrimary,
+    settings.customSecondary,
+    settings.customGlowA,
+    settings.customGlowB,
+    ...(settings.customStops ?? []),
+  ];
+  const out: RGB[] = [];
+  const seen = new Set<string>();
+  for (const hex of hexes) {
+    const key = hex.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(hexToRgb(hex));
+  }
+  return out;
+}
+
+function sampleStops(stops: RGB[], t: number): RGB {
+  if (stops.length === 0) return { r: 255, g: 255, b: 255 };
+  if (stops.length === 1) return stops[0];
+  const u = ((t % 1) + 1) % 1;
+  const scaled = u * stops.length;
+  const i = Math.floor(scaled);
+  const f = scaled - i;
+  const a = stops[i % stops.length];
+  const b = stops[(i + 1) % stops.length];
+  const ease = f * f * (3 - 2 * f);
+  return mixRgb(a, b, ease);
 }
 
 export function depthTint(base: RGB, z: number, enabled: boolean): RGB {

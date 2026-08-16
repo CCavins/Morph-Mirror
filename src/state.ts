@@ -19,7 +19,11 @@ export const BASE_EFFECT_LOOK: EffectLook = {
   palette: "aurora",
   customPrimary: "#4099FF",
   customSecondary: "#E633BF",
+  customGlowA: "#33B5FF",
+  customGlowB: "#E24DD0",
   customBackground: "#070A18",
+  customStops: [],
+  customColorFlow: false,
   useCustomColors: false,
   particleCount: 2800,
   particleSize: 1.6,
@@ -36,7 +40,9 @@ export const BASE_EFFECT_LOOK: EffectLook = {
 };
 
 export function emptyLooks(): Record<EffectMode, EffectLook> {
-  const looks = Object.fromEntries(EFFECT_MODES.map((m) => [m, { ...BASE_EFFECT_LOOK }])) as Record<EffectMode, EffectLook>;
+  const looks = Object.fromEntries(
+    EFFECT_MODES.map((m) => [m, { ...BASE_EFFECT_LOOK, customStops: [] as string[] }]),
+  ) as Record<EffectMode, EffectLook>;
   Object.assign(looks.liquid, { palette: "aurora", bloom: 0.85, turbulence: 0.4, particleSpeed: 1 });
   Object.assign(looks.particles, { palette: "aurora", particleCount: 3400, attract: 0.9 });
   Object.assign(looks.constellation, { palette: "gold", bloom: 0.9, depthColor: true });
@@ -76,6 +82,7 @@ export function emptyLooks(): Record<EffectMode, EffectLook> {
 export function captureLook(settings: Settings): EffectLook {
   const look = { ...BASE_EFFECT_LOOK };
   for (const key of EFFECT_LOOK_KEYS) look[key] = settings[key] as never;
+  look.customStops = [...(settings.customStops ?? [])];
   return look;
 }
 
@@ -138,7 +145,10 @@ const LOOK_KEYS: Array<keyof Settings> = [
   "useCustomColors",
   "customPrimary",
   "customSecondary",
+  "customGlowA",
+  "customGlowB",
   "customBackground",
+  "customColorFlow",
   "depthColor",
   "gestures",
 ];
@@ -340,8 +350,35 @@ function sanitizeLook(look: EffectLook): void {
   look.bloom = clamp(look.bloom, 0, 1.5);
   look.colorCycle = clamp(look.colorCycle, 0, 3);
   look.useCustomColors = !!look.useCustomColors;
+  look.customColorFlow = !!look.customColorFlow;
   look.showSkeleton = !!look.showSkeleton;
   look.depthColor = !!look.depthColor;
+  look.customPrimary = sanitizeHex(look.customPrimary, BASE_EFFECT_LOOK.customPrimary);
+  look.customSecondary = sanitizeHex(look.customSecondary, BASE_EFFECT_LOOK.customSecondary);
+  look.customGlowA = sanitizeHex(look.customGlowA, BASE_EFFECT_LOOK.customGlowA);
+  look.customGlowB = sanitizeHex(look.customGlowB, BASE_EFFECT_LOOK.customGlowB);
+  look.customBackground = sanitizeHex(look.customBackground, BASE_EFFECT_LOOK.customBackground);
+  look.customStops = sanitizeStops(look.customStops);
+}
+
+function sanitizeHex(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  const m = value.trim().match(/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+  if (!m) return fallback;
+  const h = m[1];
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  return `#${full.toLowerCase()}`;
+}
+
+function sanitizeStops(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const item of value) {
+    const hex = sanitizeHex(item, "");
+    if (hex) out.push(hex);
+    if (out.length >= 6) break;
+  }
+  return out;
 }
 
 function sanitize(s: Settings): void {

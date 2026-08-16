@@ -18,7 +18,6 @@ import { setHud, toast } from "./ui/hud";
 import { GestureDetector } from "./gestures";
 import { AudioPulse } from "./audio";
 import { ClipRecorder, screenshotCanvas } from "./record";
-import { PALETTES } from "./render/palettes";
 
 const settings: Settings = loadSettings();
 const camera = new Camera();
@@ -55,6 +54,7 @@ reduceMotion.addEventListener("change", () => {
 let lowSince = 0;
 let highSince = 0;
 let lastHudKey = "";
+let lastBgHex = "#070A18";
 let rotateAt = performance.now();
 
 const ui = mountSettings(settingsBody, settings, {
@@ -88,7 +88,7 @@ function paintHud(): void {
     hidden: !settings.showHud,
     recording: recorder.recording,
   });
-  document.documentElement.style.setProperty("--bg", PALETTES[settings.palette].background);
+  document.documentElement.style.setProperty("--bg", lastBgHex);
 }
 
 const MASK_MODES = new Set([
@@ -231,7 +231,7 @@ function loop(now: number): void {
     rotateAt = now;
   }
 
-  compositor.render({
+  const colors = compositor.render({
     process: camera.process,
     frame,
     settings,
@@ -240,6 +240,10 @@ function loop(now: number): void {
     audio: energy,
     reduced,
   });
+  if (colors.backgroundHex !== lastBgHex) {
+    lastBgHex = colors.backgroundHex;
+    document.documentElement.style.setProperty("--bg", lastBgHex);
+  }
 
   const hudKey = `${settings.mode}|${statusText}|${settings.showHud}|${recorder.recording}`;
   if (hudKey !== lastHudKey) {

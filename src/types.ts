@@ -24,6 +24,7 @@ export const PALETTE_IDS = [
   "ghost",
   "gold",
   "ocean",
+  "rainbow",
 ] as const;
 
 export type PaletteId = (typeof PALETTE_IDS)[number];
@@ -70,7 +71,11 @@ export interface EffectLook {
   palette: PaletteId;
   customPrimary: string;
   customSecondary: string;
+  customGlowA: string;
+  customGlowB: string;
   customBackground: string;
+  customStops: string[];
+  customColorFlow: boolean;
   useCustomColors: boolean;
   particleCount: number;
   particleSize: number;
@@ -90,7 +95,11 @@ export const EFFECT_LOOK_KEYS = [
   "palette",
   "customPrimary",
   "customSecondary",
+  "customGlowA",
+  "customGlowB",
   "customBackground",
+  "customStops",
+  "customColorFlow",
   "useCustomColors",
   "particleCount",
   "particleSize",
