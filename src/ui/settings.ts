@@ -40,7 +40,7 @@ const SLIDER_RANGE: Record<SliderKey, { min: number; max: number; step: number }
 };
 
 interface EffectPanel {
-  sliders: Array<{ key: SliderKey; label: string }>;
+  sliders: Array<{ key: SliderKey; label: string; min?: number; max?: number; step?: number }>;
   skeleton: boolean;
   depthColor: boolean;
 }
@@ -90,7 +90,7 @@ const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
   },
   ribbons: {
     sliders: [
-      { key: "particleSize", label: "Thickness" },
+      { key: "particleSize", label: "Thickness", min: 0.4, max: 16, step: 0.1 },
       { key: "trailFade", label: "Fade" },
       { key: "bloom", label: "Glow" },
       { key: "colorCycle", label: "Color flow" },
@@ -136,11 +136,10 @@ const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
   },
   bubbles: {
     sliders: [
-      { key: "particleSize", label: "Size" },
-      { key: "particleSpeed", label: "Drift" },
-      { key: "gravity", label: "Gravity" },
-      { key: "turbulence", label: "Wobble" },
+      { key: "particleSize", label: "Body" },
+      { key: "particleSpeed", label: "Flow" },
       { key: "attract", label: "Cling" },
+      { key: "turbulence", label: "Breathe" },
       { key: "bloom", label: "Shine" },
       { key: "colorCycle", label: "Color flow" },
     ],
@@ -208,7 +207,11 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
       </section>
       <section class="group">
         <h3>${EFFECT_LABELS[settings.mode]}</h3>
-        ${panel.sliders.map((s) => slider(s.label, s.key, settings[s.key], SLIDER_RANGE[s.key])).join("")}
+        ${panel.sliders.map((s) => slider(s.label, s.key, settings[s.key], {
+          min: s.min ?? SLIDER_RANGE[s.key].min,
+          max: s.max ?? SLIDER_RANGE[s.key].max,
+          step: s.step ?? SLIDER_RANGE[s.key].step,
+        })).join("")}
         ${panel.skeleton || panel.depthColor ? `<div class="checks">
           ${panel.skeleton ? `<label><input type="checkbox" data-bool="showSkeleton" ${settings.showSkeleton ? "checked" : ""}/> Skeleton overlay</label>` : ""}
           ${panel.depthColor ? `<label><input type="checkbox" data-bool="depthColor" ${settings.depthColor ? "checked" : ""}/> Depth coloring</label>` : ""}

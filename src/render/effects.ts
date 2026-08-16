@@ -191,7 +191,7 @@ export function drawRibbons(d: DrawCtx): void {
       ctx.strokeStyle = rgbCss(col, 0.52);
       ctx.shadowColor = rgbCss(col, 0.7);
       ctx.shadowBlur = 6 + bloom * 10;
-      ctx.lineWidth = 2.4 + d.settings.particleSize;
+      ctx.lineWidth = 3 + d.settings.particleSize * 10;
       ctx.stroke();
     }
   });

@@ -47,7 +47,7 @@ export function emptyLooks(): Record<EffectMode, EffectLook> {
   Object.assign(looks.particles, { palette: "aurora", particleCount: 3400, attract: 0.9 });
   Object.assign(looks.constellation, { palette: "gold", bloom: 0.9, depthColor: true });
   Object.assign(looks.neon, { palette: "plasma", bloom: 1.15, depthColor: true });
-  Object.assign(looks.ribbons, { palette: "ocean", particleSize: 2.2, trailFade: 0.18, depthColor: true });
+  Object.assign(looks.ribbons, { palette: "ocean", particleSize: 3.4, trailFade: 0.18, depthColor: true });
   Object.assign(looks.embers, {
     palette: "ember",
     particleCount: 2200,
@@ -68,11 +68,11 @@ export function emptyLooks(): Record<EffectMode, EffectLook> {
   Object.assign(looks.pixels, { palette: "toxic", turbulence: 0.35 });
   Object.assign(looks.bubbles, {
     palette: "ice",
-    particleSize: 2.4,
-    bloom: 0.8,
-    attract: 1.25,
-    turbulence: 0.12,
-    particleSpeed: 0.55,
+    particleSize: 1.8,
+    bloom: 0.95,
+    attract: 0.7,
+    turbulence: 0.08,
+    particleSpeed: 0.4,
   });
   Object.assign(looks.metaballs, { palette: "ocean", particleSize: 2.2, bloom: 0.7, depthColor: true });
   return looks;
@@ -339,7 +339,7 @@ function mergeLooks(raw: unknown): Record<EffectMode, EffectLook> {
 function sanitizeLook(look: EffectLook): void {
   if (!isPalette(look.palette)) look.palette = BASE_EFFECT_LOOK.palette;
   look.particleCount = clamp(look.particleCount, 400, 8000);
-  look.particleSize = clamp(look.particleSize, 0.4, 6);
+  look.particleSize = clamp(look.particleSize, 0.4, 16);
   look.particleLife = clamp(look.particleLife, 0.3, 6);
   look.particleSpeed = clamp(look.particleSpeed, 0.1, 3);
   look.gravity = clamp(look.gravity, -2, 2);
