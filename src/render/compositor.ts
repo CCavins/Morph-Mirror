@@ -19,7 +19,7 @@ import {
 import { BubbleEngine } from "./bubbles";
 import { visible } from "../pose";
 
-const PARTICLE_MODES = new Set(["particles", "embers", "aurora", "aura", "kaleido"]);
+const PARTICLE_MODES = new Set(["particles", "embers", "aurora", "aura"]);
 
 export class Compositor {
   readonly view: HTMLCanvasElement;
@@ -123,10 +123,7 @@ export class Compositor {
 
     if (PARTICLE_MODES.has(settings.mode)) {
       const rawCount = reduced ? Math.min(900, settings.particleCount * 0.25) : settings.particleCount;
-      const targetCount = settings.mode === "kaleido"
-        ? Math.min(reduced ? 480 : 1400, rawCount)
-        : rawCount;
-      this.particles.setCount(targetCount, w, h, settings);
+      this.particles.setCount(rawCount, w, h, settings);
       const toDisplay = (x: number, y: number) => mapCover(x, y, process.width, process.height, cover);
       if (frame.mask) {
         if (settings.mode === "aura") {
@@ -144,9 +141,7 @@ export class Compositor {
           ? "flow"
           : settings.mode === "aura"
             ? "aura"
-            : settings.mode === "kaleido"
-              ? "kaleido"
-              : "body";
+            : "body";
       if (settings.mode === "embers") {
         for (const pose of frame.poses) {
           for (const e of wristEmitters(pose, d)) {
@@ -161,22 +156,9 @@ export class Compositor {
         }
       }
       this.particles.step(dt, w, h, settings, this.attractors, kind, audio, time);
-      const kaleido = settings.mode === "kaleido";
-      const kc = kaleido
-        ? mapCover(this.center[0], 1 - this.center[1], process.width, process.height, cover)
-        : { x: w / 2, y: h / 2 };
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      this.particles.draw(
-        ctx,
-        rgbCss(colors.primary, 0.9),
-        rgbCss(colors.secondary, 0.9),
-        kaleido,
-        w,
-        h,
-        kc.x,
-        kc.y,
-      );
+      this.particles.draw(ctx, rgbCss(colors.primary, 0.9), rgbCss(colors.secondary, 0.9));
       ctx.restore();
     }
 

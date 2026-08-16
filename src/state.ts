@@ -65,7 +65,6 @@ export function emptyLooks(): Record<EffectMode, EffectLook> {
     particleSpeed: 0.8,
   });
   Object.assign(looks.aura, { palette: "ghost", particleCount: 4000, attract: 1.15, particleSize: 1.3, turbulence: 0.25 });
-  Object.assign(looks.kaleido, { palette: "plasma", particleCount: 1200, attract: 0.85, turbulence: 0.55 });
   Object.assign(looks.pixels, { palette: "toxic", turbulence: 0.35 });
   Object.assign(looks.bubbles, {
     palette: "ice",
@@ -384,6 +383,7 @@ function sanitizeStops(value: unknown): string[] {
 function sanitize(s: Settings): void {
   migrateBackground(s);
   if ((s.mode as string) === "ghost") s.mode = "bubbles";
+  if ((s.mode as string) === "kaleido") s.mode = "liquid";
   if (!isEffect(s.mode)) s.mode = "liquid";
   if (!isPalette(s.palette)) s.palette = BASE_EFFECT_LOOK.palette;
   if (!isRotation(s.rotation)) s.rotation = 0;

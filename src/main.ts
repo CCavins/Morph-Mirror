@@ -97,7 +97,6 @@ const MASK_MODES = new Set([
   "particles",
   "aurora",
   "aura",
-  "kaleido",
   "bubbles",
 ]);
 
@@ -347,15 +346,13 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (k === "0") {
-    changeMode(EFFECT_MODES[9]);
+    const mode = EFFECT_MODES[9];
+    if (mode) changeMode(mode);
     return;
   }
   if (k === "-") {
-    changeMode(EFFECT_MODES[10]);
-    return;
-  }
-  if (k === "=") {
-    changeMode(EFFECT_MODES[11]);
+    const mode = EFFECT_MODES[10];
+    if (mode) changeMode(mode);
     return;
   }
   if (k === "[") {

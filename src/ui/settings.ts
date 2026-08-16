@@ -126,11 +126,6 @@ const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
     skeleton: true,
     depthColor: false,
   },
-  kaleido: {
-    sliders: [...PARTICLE_SLIDERS, { key: "colorCycle", label: "Color flow" }],
-    skeleton: true,
-    depthColor: false,
-  },
   pixels: {
     sliders: [
       { key: "turbulence", label: "Wobble" },
@@ -250,7 +245,7 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
         <h3>Shortcuts</h3>
         <ul class="shortcuts">
           <li><b>S</b> or <b>,</b> toggle this panel · <b>Esc</b> close</li>
-          <li><b>1–9</b> <b>0</b> <b>-</b> <b>=</b> effects · <b>N</b> next · <b>[ ]</b> palettes</li>
+          <li><b>1–9</b> <b>0</b> <b>-</b> effects · <b>N</b> next · <b>[ ]</b> palettes</li>
           <li><b>B</b> background (solid / motion / camera)</li>
           <li><b>M</b> mirror · <b>R</b> rotate · <b>C</b> camera</li>
           <li><b>F</b> fullscreen · <b>H</b> HUD · <b>Space</b> freeze</li>

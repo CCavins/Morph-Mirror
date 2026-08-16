@@ -72,7 +72,7 @@ export class ParticleEngine {
     h: number,
     settings: Settings,
     attractors: Attractor[],
-    mode: "body" | "flow" | "ember" | "aura" | "kaleido",
+    mode: "body" | "flow" | "ember" | "aura",
     audio: number,
     time: number,
   ): void {
@@ -86,7 +86,7 @@ export class ParticleEngine {
     for (let i = 0; i < this.count; i++) {
       this.life[i] -= dt;
       if (this.life[i] <= 0) {
-        if (nAttr && (mode === "body" || mode === "aura" || mode === "kaleido")) {
+        if (nAttr && (mode === "body" || mode === "aura")) {
           const a = attractors[(i * 17 + (this.seed[i] | 0)) % nAttr];
           this.x[i] = a.x + (Math.random() - 0.5) * 10;
           this.y[i] = a.y + (Math.random() - 0.5) * 10;
@@ -149,14 +149,7 @@ export class ParticleEngine {
     ctx: CanvasRenderingContext2D,
     colorA: string,
     colorB: string,
-    kaleido: boolean,
-    w: number,
-    h: number,
-    kx = w / 2,
-    ky = h / 2,
   ): void {
-    const cx = kx;
-    const cy = ky;
     for (let i = 0; i < this.count; i++) {
       const t = this.life[i] / Math.max(0.001, this.maxLife[i]);
       const a = Math.min(1, t * 1.4) * 0.85;
@@ -164,23 +157,8 @@ export class ParticleEngine {
       ctx.fillStyle = hash2(this.seed[i], 1) > 0.5 ? colorA : colorB;
       ctx.globalAlpha = a;
       const r = this.size[i] * (0.6 + t * 0.8);
-      if (kaleido) {
-        for (let k = 0; k < 6; k++) {
-          const ang = (k * Math.PI) / 3;
-          const dx = this.x[i] - cx;
-          const dy = this.y[i] - cy;
-          const x = cx + dx * Math.cos(ang) - dy * Math.sin(ang);
-          const y = cy + dx * Math.sin(ang) + dy * Math.cos(ang);
-          if (r < 2.2) ctx.fillRect(x - r, y - r, r * 2, r * 2);
-          else {
-            ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-      } else if (r < 2.2) {
-        ctx.fillRect(this.x[i] - r, this.y[i] - r, r * 2, r * 2);
-      } else {
+      if (r < 2.2) ctx.fillRect(this.x[i] - r, this.y[i] - r, r * 2, r * 2);
+      else {
         ctx.beginPath();
         ctx.arc(this.x[i], this.y[i], r, 0, Math.PI * 2);
         ctx.fill();
