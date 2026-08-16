@@ -16,7 +16,7 @@ export class Camera {
     document.body.append(this.video);
 
     this.process = document.createElement("canvas");
-    const ctx = this.process.getContext("2d", { alpha: false });
+    const ctx = this.process.getContext("2d", { alpha: false, desynchronized: true });
     if (!ctx) throw new Error("Could not create processing canvas.");
     this.ctx = ctx;
   }
@@ -55,6 +55,19 @@ export class Camera {
     const track = this.stream.getVideoTracks()[0];
     this.deviceId = track?.getSettings().deviceId ?? deviceId ?? "";
     await this.refreshDevices();
+  }
+
+  pausePlayback(): void {
+    this.video.pause();
+  }
+
+  async resumePlayback(): Promise<void> {
+    if (!this.stream || !this.video.paused) return;
+    try {
+      await this.video.play();
+    } catch {
+      /* autoplay blocked while backgrounded */
+    }
   }
 
   stop(): void {

@@ -1,9 +1,11 @@
 import {
   BACKGROUND_MODES,
+  EFFECT_LOOK_KEYS,
   EFFECT_MODES,
   PALETTE_IDS,
   ROTATIONS,
   type BackgroundMode,
+  type EffectLook,
   type EffectMode,
   type PaletteId,
   type Rotation,
@@ -13,17 +15,13 @@ import { clamp } from "./math";
 
 const STORAGE_KEY = "morph-mirror-settings-v1";
 
-export const DEFAULT_SETTINGS: Settings = {
-  deviceId: "",
-  mirror: true,
-  rotation: 0,
-  mode: "liquid",
+export const BASE_EFFECT_LOOK: EffectLook = {
   palette: "aurora",
   customPrimary: "#4099FF",
   customSecondary: "#E633BF",
   customBackground: "#070A18",
   useCustomColors: false,
-  particleCount: 4200,
+  particleCount: 2800,
   particleSize: 1.6,
   particleLife: 1.8,
   particleSpeed: 1,
@@ -33,17 +31,60 @@ export const DEFAULT_SETTINGS: Settings = {
   attract: 0.7,
   bloom: 0.7,
   colorCycle: 0,
-  cameraMix: 1,
-  background: "solid",
   showSkeleton: false,
-  showHud: true,
-  modelQuality: "lite",
-  numPoses: 2,
-  frozen: false,
-  gestures: true,
-  audioReactive: false,
   depthColor: true,
 };
+
+export function emptyLooks(): Record<EffectMode, EffectLook> {
+  const looks = Object.fromEntries(EFFECT_MODES.map((m) => [m, { ...BASE_EFFECT_LOOK }])) as Record<EffectMode, EffectLook>;
+  looks.bubbles.palette = "ice";
+  looks.bubbles.particleSize = 2;
+  looks.bubbles.bloom = 0.9;
+  looks.bubbles.attract = 0.8;
+  looks.bubbles.turbulence = 0.35;
+  return looks;
+}
+
+export function captureLook(settings: Settings): EffectLook {
+  const look = { ...BASE_EFFECT_LOOK };
+  for (const key of EFFECT_LOOK_KEYS) look[key] = settings[key] as never;
+  return look;
+}
+
+export function applyLook(settings: Settings, look: EffectLook): void {
+  Object.assign(settings, look);
+}
+
+export function setMode(settings: Settings, mode: EffectMode): boolean {
+  if (!isEffect(mode) || mode === settings.mode) return false;
+  settings.effectLooks[settings.mode] = captureLook(settings);
+  settings.mode = mode;
+  applyLook(settings, settings.effectLooks[mode] ?? BASE_EFFECT_LOOK);
+  return true;
+}
+
+export function defaultSettings(): Settings {
+  return {
+    deviceId: "",
+    mirror: true,
+    rotation: 0,
+    mode: "liquid",
+    ...BASE_EFFECT_LOOK,
+    cameraMix: 1,
+    background: "solid",
+    showHud: true,
+    modelQuality: "lite",
+    numPoses: 2,
+    frozen: false,
+    gestures: true,
+    audioReactive: false,
+    autoRotate: false,
+    autoRotateSeconds: 12,
+    effectLooks: emptyLooks(),
+  };
+}
+
+export const DEFAULT_SETTINGS: Settings = defaultSettings();
 
 const LOOK_KEYS: Array<keyof Settings> = [
   "mode",
@@ -91,20 +132,27 @@ function parseBool(v: string | null, fallback: boolean): boolean {
 }
 
 export function loadSettings(): Settings {
-  const next: Settings = { ...DEFAULT_SETTINGS };
+  const next = defaultSettings();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) Object.assign(next, JSON.parse(raw) as Partial<Settings>);
   } catch {
     /* ignore */
   }
+  next.effectLooks = mergeLooks(next.effectLooks);
+  if ((next.mode as string) === "ghost") next.mode = "bubbles";
+  if (isEffect(next.mode)) {
+    next.effectLooks[next.mode] = { ...next.effectLooks[next.mode], ...captureLook(next) };
+  }
   applyUrlParams(next);
   sanitize(next);
+  next.effectLooks[next.mode] = captureLook(next);
   return next;
 }
 
 export function saveSettings(settings: Settings): void {
   try {
+    settings.effectLooks[settings.mode] = captureLook(settings);
     const { frozen, ...rest } = settings;
     void frozen;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
@@ -115,8 +163,8 @@ export function saveSettings(settings: Settings): void {
 
 export function applyUrlParams(settings: Settings): void {
   const p = new URLSearchParams(location.search);
-  const mode = p.get("mode");
-  if (mode && isEffect(mode)) settings.mode = mode;
+  const mode = p.get("mode") === "ghost" ? "bubbles" : p.get("mode");
+  if (mode && isEffect(mode)) setMode(settings, mode);
   const palette = p.get("palette");
   if (palette && isPalette(palette)) settings.palette = palette;
   if (p.has("mirror")) settings.mirror = parseBool(p.get("mirror"), settings.mirror);
@@ -154,10 +202,10 @@ export function lookUrl(settings: Settings): string {
 }
 
 export function applyLookPreset(settings: Settings, name: string): void {
-  settings.useCustomColors = false;
   switch (name) {
     case "portrait":
-      settings.mode = "liquid";
+      setMode(settings, "liquid");
+      settings.useCustomColors = false;
       settings.palette = "ice";
       settings.cameraMix = 0.55;
       settings.bloom = 0.8;
@@ -165,7 +213,8 @@ export function applyLookPreset(settings: Settings, name: string): void {
       settings.particleCount = 2800;
       break;
     case "rave":
-      settings.mode = "particles";
+      setMode(settings, "particles");
+      settings.useCustomColors = false;
       settings.palette = "plasma";
       settings.cameraMix = 1;
       settings.bloom = 1;
@@ -175,7 +224,8 @@ export function applyLookPreset(settings: Settings, name: string): void {
       settings.background = "solid";
       break;
     case "installation":
-      settings.mode = "aura";
+      setMode(settings, "aura");
+      settings.useCustomColors = false;
       settings.palette = "aurora";
       settings.cameraMix = 1;
       settings.bloom = 0.85;
@@ -184,16 +234,20 @@ export function applyLookPreset(settings: Settings, name: string): void {
       settings.particleCount = 5200;
       break;
     case "ghostly":
-      settings.mode = "ghost";
-      settings.palette = "ghost";
+      setMode(settings, "bubbles");
+      settings.useCustomColors = false;
+      settings.palette = "ice";
       settings.cameraMix = 1;
       settings.trailFade = 0.08;
-      settings.bloom = 0.5;
+      settings.bloom = 0.85;
+      settings.particleSize = 2.1;
+      settings.attract = 0.85;
       settings.background = "solid";
       break;
     default:
-      break;
+      return;
   }
+  settings.effectLooks[settings.mode] = captureLook(settings);
 }
 
 export function nextMode(current: EffectMode, dir: 1 | -1): EffectMode {
@@ -230,23 +284,48 @@ function migrateBackground(s: Settings): void {
   else if (!isBackground(bg)) s.background = DEFAULT_SETTINGS.background;
 }
 
+function mergeLooks(raw: unknown): Record<EffectMode, EffectLook> {
+  const out = emptyLooks();
+  if (!raw || typeof raw !== "object") return out;
+  const src = raw as Record<string, Partial<EffectLook>>;
+  if (src.ghost && !src.bubbles) src.bubbles = src.ghost;
+  for (const mode of EFFECT_MODES) {
+    const look = src[mode];
+    if (look && typeof look === "object") Object.assign(out[mode], look);
+    sanitizeLook(out[mode]);
+  }
+  return out;
+}
+
+function sanitizeLook(look: EffectLook): void {
+  if (!isPalette(look.palette)) look.palette = BASE_EFFECT_LOOK.palette;
+  look.particleCount = clamp(look.particleCount, 400, 8000);
+  look.particleSize = clamp(look.particleSize, 0.4, 6);
+  look.particleLife = clamp(look.particleLife, 0.3, 6);
+  look.particleSpeed = clamp(look.particleSpeed, 0.1, 3);
+  look.gravity = clamp(look.gravity, -2, 2);
+  look.turbulence = clamp(look.turbulence, 0, 2);
+  look.trailFade = clamp(look.trailFade, 0.02, 0.6);
+  look.attract = clamp(look.attract, 0, 2);
+  look.bloom = clamp(look.bloom, 0, 1.5);
+  look.colorCycle = clamp(look.colorCycle, 0, 3);
+  look.useCustomColors = !!look.useCustomColors;
+  look.showSkeleton = !!look.showSkeleton;
+  look.depthColor = !!look.depthColor;
+}
+
 function sanitize(s: Settings): void {
   migrateBackground(s);
-  if (!isEffect(s.mode)) s.mode = DEFAULT_SETTINGS.mode;
-  if (!isPalette(s.palette)) s.palette = DEFAULT_SETTINGS.palette;
+  if ((s.mode as string) === "ghost") s.mode = "bubbles";
+  if (!isEffect(s.mode)) s.mode = "liquid";
+  if (!isPalette(s.palette)) s.palette = BASE_EFFECT_LOOK.palette;
   if (!isRotation(s.rotation)) s.rotation = 0;
-  s.particleCount = clamp(s.particleCount, 400, 12000);
-  s.particleSize = clamp(s.particleSize, 0.4, 6);
-  s.particleLife = clamp(s.particleLife, 0.3, 6);
-  s.particleSpeed = clamp(s.particleSpeed, 0.1, 3);
-  s.gravity = clamp(s.gravity, -2, 2);
-  s.turbulence = clamp(s.turbulence, 0, 2);
-  s.trailFade = clamp(s.trailFade, 0.02, 0.6);
-  s.attract = clamp(s.attract, 0, 2);
-  s.bloom = clamp(s.bloom, 0, 1.5);
-  s.colorCycle = clamp(s.colorCycle, 0, 3);
+  s.effectLooks = mergeLooks(s.effectLooks);
+  sanitizeLook(s);
   s.cameraMix = clamp(s.cameraMix, 0, 1);
   s.numPoses = s.numPoses === 1 ? 1 : 2;
+  s.autoRotate = !!s.autoRotate;
+  s.autoRotateSeconds = clamp(s.autoRotateSeconds || 12, 3, 120);
 }
 
 export { LOOK_KEYS };

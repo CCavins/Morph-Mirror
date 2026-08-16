@@ -9,7 +9,7 @@ export const EFFECT_MODES = [
   "aura",
   "kaleido",
   "pixels",
-  "ghost",
+  "bubbles",
   "metaballs",
 ] as const;
 
@@ -66,11 +66,7 @@ export interface PoseFrame {
   hasPerson: boolean;
 }
 
-export interface Settings {
-  deviceId: string;
-  mirror: boolean;
-  rotation: Rotation;
-  mode: EffectMode;
+export interface EffectLook {
   palette: PaletteId;
   customPrimary: string;
   customSecondary: string;
@@ -86,16 +82,46 @@ export interface Settings {
   attract: number;
   bloom: number;
   colorCycle: number;
+  showSkeleton: boolean;
+  depthColor: boolean;
+}
+
+export const EFFECT_LOOK_KEYS = [
+  "palette",
+  "customPrimary",
+  "customSecondary",
+  "customBackground",
+  "useCustomColors",
+  "particleCount",
+  "particleSize",
+  "particleLife",
+  "particleSpeed",
+  "gravity",
+  "turbulence",
+  "trailFade",
+  "attract",
+  "bloom",
+  "colorCycle",
+  "showSkeleton",
+  "depthColor",
+] as const satisfies ReadonlyArray<keyof EffectLook>;
+
+export interface Settings extends EffectLook {
+  deviceId: string;
+  mirror: boolean;
+  rotation: Rotation;
+  mode: EffectMode;
   cameraMix: number;
   background: BackgroundMode;
-  showSkeleton: boolean;
   showHud: boolean;
   modelQuality: ModelQuality;
   numPoses: 1 | 2;
   frozen: boolean;
   gestures: boolean;
   audioReactive: boolean;
-  depthColor: boolean;
+  autoRotate: boolean;
+  autoRotateSeconds: number;
+  effectLooks: Record<EffectMode, EffectLook>;
 }
 
 export const EFFECT_LABELS: Record<EffectMode, string> = {
@@ -109,7 +135,7 @@ export const EFFECT_LABELS: Record<EffectMode, string> = {
   aura: "Aura Edge",
   kaleido: "Kaleido",
   pixels: "Pixel Morph",
-  ghost: "Ghost",
+  bubbles: "Bubbles",
   metaballs: "Metaballs",
 };
 

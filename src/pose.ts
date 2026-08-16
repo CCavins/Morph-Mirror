@@ -18,10 +18,6 @@ function toLandmarks(list: Array<{ x: number; y: number; z: number; visibility?:
   }));
 }
 
-function emptyPose(): BodyPose {
-  return { landmarks: [], prev: [] };
-}
-
 export class PoseTracker {
   private landmarker: PoseLandmarker | null = null;
   private vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>> | null = null;
@@ -36,6 +32,7 @@ export class PoseTracker {
   private prevPoses: Landmark[][] = [];
   private maskScratch: Float32Array | null = null;
   private lastTs = -1;
+  private lastDetectAt = 0;
   quality: ModelQuality = "lite";
   numPoses: 1 | 2 = 2;
   loading = false;
@@ -84,10 +81,14 @@ export class PoseTracker {
     await this.init(quality, numPoses);
   }
 
-  detect(source: HTMLCanvasElement, timestampMs: number): PoseFrame {
-    if (!this.landmarker || source.width < 2) return this.last;
+  detect(source: HTMLCanvasElement, timestampMs: number, minInterval = 33, copyMask = true): PoseFrame {
+    if (this.loading || !this.landmarker || source.width < 2) return this.last;
+    if (this.lastDetectAt > 0 && timestampMs - this.lastDetectAt < minInterval) {
+      return this.last;
+    }
     if (timestampMs <= this.lastTs) timestampMs = this.lastTs + 1;
     this.lastTs = timestampMs;
+    this.lastDetectAt = timestampMs;
 
     let result: PoseLandmarkerResult;
     try {
@@ -96,38 +97,42 @@ export class PoseTracker {
       return this.last;
     }
 
-    const raw = (result.landmarks ?? []).map(toLandmarks);
-    const smoothed = this.smoother.apply(raw);
-    const poses: BodyPose[] = smoothed.map((landmarks, i) => {
-      const prev = this.prevPoses[i] ?? landmarks.map((l) => ({ ...l }));
-      return { landmarks, prev };
-    });
-    this.prevPoses = smoothed.map((p) => p.map((l) => ({ ...l })));
+    const masks = result.segmentationMasks ?? [];
+    try {
+      const raw = (result.landmarks ?? []).map(toLandmarks);
+      const smoothed = this.smoother.apply(raw);
+      const poses: BodyPose[] = smoothed.map((landmarks, i) => {
+        const prev = this.prevPoses[i] ?? landmarks.map((l) => ({ ...l }));
+        return { landmarks, prev };
+      });
+      this.prevPoses = smoothed.map((p) => p.map((l) => ({ ...l })));
 
-    let mask: Float32Array | null = null;
-    let maskWidth = 0;
-    let maskHeight = 0;
-    const seg = result.segmentationMasks?.[0];
-    if (seg) {
-      maskWidth = seg.width;
-      maskHeight = seg.height;
-      const data = seg.getAsFloat32Array();
-      if (!this.maskScratch || this.maskScratch.length !== data.length) {
-        this.maskScratch = new Float32Array(data.length);
+      let mask: Float32Array | null = copyMask ? null : this.last.mask;
+      let maskWidth = copyMask ? 0 : this.last.maskWidth;
+      let maskHeight = copyMask ? 0 : this.last.maskHeight;
+      const seg = masks[0];
+      if (seg && copyMask) {
+        maskWidth = seg.width;
+        maskHeight = seg.height;
+        const data = seg.getAsFloat32Array();
+        if (!this.maskScratch || this.maskScratch.length !== data.length) {
+          this.maskScratch = new Float32Array(data.length);
+        }
+        this.maskScratch.set(data);
+        mask = this.maskScratch;
       }
-      this.maskScratch.set(data);
-      mask = this.maskScratch;
-      seg.close();
-    }
 
-    this.last = {
-      poses,
-      mask,
-      maskWidth,
-      maskHeight,
-      hasPerson: poses.some((p) => p.landmarks.some((l) => l.vis > 0.5)),
-    };
-    return this.last;
+      this.last = {
+        poses,
+        mask,
+        maskWidth,
+        maskHeight,
+        hasPerson: poses.some((p) => p.landmarks.some((l) => l.vis > 0.5)),
+      };
+      return this.last;
+    } finally {
+      for (const m of masks) m.close();
+    }
   }
 
   get frame(): PoseFrame {

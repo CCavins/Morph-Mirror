@@ -10,11 +10,12 @@ import {
   nextPalette,
   nextRotation,
   saveSettings,
+  setMode,
 } from "./state";
-import { BACKGROUND_LABELS, EFFECT_MODES, type Settings } from "./types";
+import { BACKGROUND_LABELS, EFFECT_MODES, type EffectMode, type Settings } from "./types";
 import { mountSettings } from "./ui/settings";
 import { setHud, toast } from "./ui/hud";
-import { GestureDetector, applyGesture } from "./gestures";
+import { GestureDetector } from "./gestures";
 import { AudioPulse } from "./audio";
 import { ClipRecorder, screenshotCanvas } from "./record";
 import { PALETTES } from "./render/palettes";
@@ -38,15 +39,21 @@ const closeSettings = document.getElementById("close-settings") as HTMLButtonEle
 let running = false;
 let last = performance.now();
 let fpsSmoothed = 60;
-let idleSince = 0;
-let attractCycle = 0;
 let burstQueued = false;
 let wakeLock: WakeLockSentinel | null = null;
 let statusText = "Stand in the light";
 let lastDeviceId = settings.deviceId;
 let lastQuality = settings.modelQuality;
 let lastPoses = settings.numPoses;
-let reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+let reduced = reduceMotion.matches;
+reduceMotion.addEventListener("change", () => {
+  if (reduceMotion.matches) reduced = true;
+});
+let lowSince = 0;
+let highSince = 0;
+let lastHudKey = "";
+let rotateAt = performance.now();
 
 const ui = mountSettings(settingsBody, settings, {
   onChange: () => {
@@ -64,6 +71,14 @@ function persist(): void {
   saveSettings(settings);
 }
 
+function changeMode(mode: EffectMode): void {
+  if (!setMode(settings, mode)) return;
+  rotateAt = performance.now();
+  persist();
+  refreshUi();
+  paintHud();
+}
+
 function paintHud(): void {
   setHud({
     mode: settings.mode,
@@ -74,8 +89,24 @@ function paintHud(): void {
   document.documentElement.style.setProperty("--bg", PALETTES[settings.palette].background);
 }
 
+const MASK_MODES = new Set([
+  "liquid",
+  "pixels",
+  "particles",
+  "embers",
+  "aurora",
+  "aura",
+  "kaleido",
+  "bubbles",
+]);
+
 function setSettingsOpen(open: boolean): void {
   settingsEl.hidden = !open;
+  if (open) ui.refresh();
+}
+
+function refreshUi(): void {
+  if (!settingsEl.hidden) ui.refresh();
 }
 
 function toggleSettings(): void {
@@ -91,7 +122,7 @@ async function applyRuntime(): Promise<void> {
     } catch (err) {
       toast(cameraErrorMessage(err));
     }
-    ui.refresh();
+    refreshUi();
   }
   if (settings.modelQuality !== lastQuality || settings.numPoses !== lastPoses) {
     lastQuality = settings.modelQuality;
@@ -108,13 +139,19 @@ async function applyRuntime(): Promise<void> {
     } catch {
       settings.audioReactive = false;
       toast("Microphone permission was blocked.");
-      ui.refresh();
+      refreshUi();
     }
   }
   if (!settings.audioReactive && audio.enabled) audio.stop();
 }
 
 async function requestWake(): Promise<void> {
+  try {
+    await wakeLock?.release();
+  } catch {
+    /* already released */
+  }
+  wakeLock = null;
   try {
     wakeLock = (await navigator.wakeLock?.request("screen")) ?? null;
   } catch {
@@ -124,32 +161,46 @@ async function requestWake(): Promise<void> {
 
 function loop(now: number): void {
   if (!running) return;
+  requestAnimationFrame(loop);
+  if (document.hidden) {
+    last = now;
+    rotateAt = now;
+    return;
+  }
+
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   const instFps = dt > 0 ? 1 / dt : 60;
   fpsSmoothed = fpsSmoothed * 0.9 + instFps * 0.1;
   compositor.fps = fpsSmoothed;
-  if (fpsSmoothed < 24) reduced = true;
-  else if (fpsSmoothed > 40 && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    reduced = false;
+  if (fpsSmoothed < 26) {
+    if (!lowSince) lowSince = now;
+    highSince = 0;
+    if (now - lowSince > 1400) reduced = true;
+  } else if (fpsSmoothed > 40) {
+    if (!highSince) highSince = now;
+    lowSince = 0;
+    if (now - highSince > 2800) reduced = reduceMotion.matches;
   }
 
-  compositor.resize();
+  compositor.resize(reduced);
   const drawn = camera.drawProcess(settings.mirror, settings.rotation, reduced ? 480 : 640);
   if (drawn && !settings.frozen) {
-    pose.detect(camera.process, now);
+    pose.detect(camera.process, now, reduced ? 50 : 33, MASK_MODES.has(settings.mode));
   }
-  const frame = settings.frozen ? pose.frame : pose.frame;
+  const frame = pose.frame;
 
   const energy = settings.audioReactive ? audio.sample() : 0;
   const g = gestures.update(frame.poses, now, settings.gestures);
   if (g) {
-    const next = applyGesture(g.name, settings.mode, settings.palette);
-    settings.mode = next.mode;
-    settings.palette = next.palette;
-    if (next.burst) burstQueued = true;
-    persist();
-    ui.refresh();
+    if (g.name === "handsUp") changeMode(nextMode(settings.mode, 1));
+    else if (g.name === "tpose") {
+      settings.palette = nextPalette(settings.palette, 1);
+      persist();
+      refreshUi();
+    } else {
+      burstQueued = true;
+    }
     toast(g.name === "handsUp" ? "Next effect" : g.name === "tpose" ? "Next palette" : "Burst");
   }
 
@@ -159,17 +210,16 @@ function loop(now: number): void {
   }
 
   if (frame.hasPerson) {
-    idleSince = now;
     statusText = frame.poses.length > 1 ? "Two figures in the glass" : "Mirroring you";
   } else {
     statusText = "Step closer";
-    if (now - idleSince > 3500) {
-      attractCycle += dt;
-      if (attractCycle > 8) {
-        attractCycle = 0;
-        settings.palette = nextPalette(settings.palette, 1);
-      }
-    }
+  }
+
+  if (settings.autoRotate && !settings.frozen && settingsEl.hidden) {
+    const wait = Math.max(3, settings.autoRotateSeconds) * 1000;
+    if (now - rotateAt >= wait) changeMode(nextMode(settings.mode, 1));
+  } else if (!settings.autoRotate || !settingsEl.hidden || settings.frozen) {
+    rotateAt = now;
   }
 
   compositor.render({
@@ -182,8 +232,11 @@ function loop(now: number): void {
     reduced,
   });
 
-  paintHud();
-  requestAnimationFrame(loop);
+  const hudKey = `${settings.mode}|${statusText}|${settings.showHud}|${recorder.recording}`;
+  if (hudKey !== lastHudKey) {
+    lastHudKey = hudKey;
+    paintHud();
+  }
 }
 
 async function start(): Promise<void> {
@@ -199,10 +252,9 @@ async function start(): Promise<void> {
     await pose.init(settings.modelQuality, settings.numPoses);
     lastQuality = settings.modelQuality;
     lastPoses = settings.numPoses;
-    ui.refresh();
+    refreshUi();
     gate.hidden = true;
     running = true;
-    idleSince = performance.now();
     last = performance.now();
     await requestWake();
     if (settings.audioReactive) {
@@ -228,16 +280,30 @@ view.addEventListener("dblclick", () => {
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") void requestWake();
+  if (document.visibilityState === "hidden") {
+    camera.pausePlayback();
+    return;
+  }
+  void camera.resumePlayback();
+  void requestWake();
 });
 
 navigator.mediaDevices?.addEventListener("devicechange", () => {
-  void camera.refreshDevices().then(() => ui.refresh());
+  void camera.refreshDevices().then(() => refreshUi());
 });
 
 window.addEventListener("keydown", (e) => {
+  if (!running) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key;
+  const target = e.target;
+  if (
+    k !== "Escape" &&
+    target instanceof HTMLElement &&
+    (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA")
+  ) {
+    return;
+  }
   if (k === "s" || k === "S" || k === ",") {
     e.preventDefault();
     toggleSettings();
@@ -248,47 +314,44 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (k >= "1" && k <= "9") {
-    settings.mode = EFFECT_MODES[Number(k) - 1] ?? settings.mode;
-    persist();
-    ui.refresh();
+    const mode = EFFECT_MODES[Number(k) - 1];
+    if (mode) changeMode(mode);
     return;
   }
   if (k === "0") {
-    settings.mode = EFFECT_MODES[9];
-    persist();
-    ui.refresh();
+    changeMode(EFFECT_MODES[9]);
     return;
   }
   if (k === "[") {
     settings.palette = nextPalette(settings.palette, -1);
     persist();
-    ui.refresh();
+    refreshUi();
     return;
   }
   if (k === "]") {
     settings.palette = nextPalette(settings.palette, 1);
     persist();
-    ui.refresh();
+    refreshUi();
     return;
   }
   if (k === "m" || k === "M") {
     settings.mirror = !settings.mirror;
     persist();
-    ui.refresh();
+    refreshUi();
     toast(settings.mirror ? "Mirror on" : "Mirror off");
     return;
   }
   if (k === "b" || k === "B") {
     settings.background = nextBackground(settings.background);
     persist();
-    ui.refresh();
+    refreshUi();
     toast(BACKGROUND_LABELS[settings.background]);
     return;
   }
   if (k === "r" || k === "R") {
     settings.rotation = nextRotation(settings.rotation);
     persist();
-    ui.refresh();
+    refreshUi();
     toast(`Rotation ${settings.rotation}°`);
     return;
   }
@@ -298,7 +361,7 @@ window.addEventListener("keydown", (e) => {
       settings.deviceId = id;
       void applyRuntime();
       persist();
-      ui.refresh();
+      refreshUi();
     }
     return;
   }
@@ -338,9 +401,7 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (k === "n" || k === "N") {
-    settings.mode = nextMode(settings.mode, 1);
-    persist();
-    ui.refresh();
+    changeMode(nextMode(settings.mode, 1));
   }
 });
 

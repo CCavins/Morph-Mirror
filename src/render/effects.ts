@@ -186,48 +186,6 @@ export function drawPixels(d: DrawCtx): void {
   ctx.restore();
 }
 
-const ghosts: ImageData[] = [];
-
-export function drawGhost(d: DrawCtx, process: HTMLCanvasElement): void {
-  const { ctx } = d;
-  if (ghosts.length > 8) ghosts.shift();
-  try {
-    const small = document.createElement("canvas");
-    small.width = 160;
-    small.height = Math.max(2, Math.round(160 * (process.height / process.width)));
-    const sctx = small.getContext("2d");
-    if (sctx) {
-      sctx.drawImage(process, 0, 0, small.width, small.height);
-      ghosts.push(sctx.getImageData(0, 0, small.width, small.height));
-    }
-  } catch {
-    /* tainted or busy */
-  }
-  ctx.save();
-  ghosts.forEach((img, i) => {
-    const t = (i + 1) / ghosts.length;
-    ctx.globalAlpha = t * 0.18;
-    const scale = 0.92 + t * 0.08;
-    const tw = d.w * scale;
-    const th = d.h * scale;
-    const tmp = ghostCanvas(img);
-    ctx.drawImage(tmp, (d.w - tw) / 2, (d.h - th) / 2, tw, th);
-  });
-  ctx.globalAlpha = 0.35;
-  ctx.globalCompositeOperation = "screen";
-  ctx.drawImage(process, d.cover.x, d.cover.y, d.srcW * d.cover.scale, d.srcH * d.cover.scale);
-  ctx.restore();
-  drawSkeleton(d, 0.35);
-}
-
-const ghostHold = document.createElement("canvas");
-function ghostCanvas(img: ImageData): HTMLCanvasElement {
-  if (ghostHold.width !== img.width) ghostHold.width = img.width;
-  if (ghostHold.height !== img.height) ghostHold.height = img.height;
-  ghostHold.getContext("2d")?.putImageData(img, 0, 0);
-  return ghostHold;
-}
-
 const blobCanvas = document.createElement("canvas");
 const blobCtx = blobCanvas.getContext("2d");
 

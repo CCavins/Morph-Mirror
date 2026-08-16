@@ -1,6 +1,7 @@
 export class ClipRecorder {
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
+  private stream: MediaStream | null = null;
   recording = false;
 
   get supported(): boolean {
@@ -9,7 +10,9 @@ export class ClipRecorder {
 
   start(canvas: HTMLCanvasElement): boolean {
     if (!this.supported || this.recording) return false;
+    this.stream?.getTracks().forEach((t) => t.stop());
     const stream = canvas.captureStream(30);
+    this.stream = stream;
     const mime = pickMime();
     try {
       this.chunks = [];
@@ -17,6 +20,8 @@ export class ClipRecorder {
         ? new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6_000_000 })
         : new MediaRecorder(stream);
     } catch {
+      stream.getTracks().forEach((t) => t.stop());
+      this.stream = null;
       return false;
     }
     this.recorder.ondataavailable = (e) => {
@@ -29,6 +34,8 @@ export class ClipRecorder {
       downloadBlob(blob, `morph-mirror-${Date.now()}.${ext}`);
       this.chunks = [];
       this.recording = false;
+      this.stream?.getTracks().forEach((t) => t.stop());
+      this.stream = null;
     };
     this.recorder.start();
     this.recording = true;

@@ -170,10 +170,15 @@ export class ParticleEngine {
           const dy = this.y[i] - cy;
           const x = cx + dx * Math.cos(ang) - dy * Math.sin(ang);
           const y = cy + dx * Math.sin(ang) + dy * Math.cos(ang);
-          ctx.beginPath();
-          ctx.arc(x, y, r, 0, Math.PI * 2);
-          ctx.fill();
+          if (r < 2.2) ctx.fillRect(x - r, y - r, r * 2, r * 2);
+          else {
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
+      } else if (r < 2.2) {
+        ctx.fillRect(this.x[i] - r, this.y[i] - r, r * 2, r * 2);
       } else {
         ctx.beginPath();
         ctx.arc(this.x[i], this.y[i], r, 0, Math.PI * 2);

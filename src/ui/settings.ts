@@ -4,10 +4,160 @@ import {
   EFFECT_LABELS,
   EFFECT_MODES,
   PALETTE_IDS,
+  type EffectMode,
   type Settings,
 } from "../types";
 import { PALETTES } from "../render/palettes";
-import { applyLookPreset } from "../state";
+import { applyLookPreset, setMode } from "../state";
+
+type SliderKey =
+  | "particleCount"
+  | "particleSize"
+  | "particleLife"
+  | "particleSpeed"
+  | "gravity"
+  | "turbulence"
+  | "trailFade"
+  | "attract"
+  | "bloom"
+  | "colorCycle"
+  | "cameraMix"
+  | "autoRotateSeconds";
+
+const SLIDER_RANGE: Record<SliderKey, { min: number; max: number; step: number }> = {
+  particleCount: { min: 400, max: 8000, step: 100 },
+  particleSize: { min: 0.4, max: 6, step: 0.1 },
+  particleLife: { min: 0.3, max: 6, step: 0.1 },
+  particleSpeed: { min: 0.1, max: 3, step: 0.05 },
+  gravity: { min: -2, max: 2, step: 0.05 },
+  turbulence: { min: 0, max: 2, step: 0.05 },
+  trailFade: { min: 0.02, max: 0.6, step: 0.01 },
+  attract: { min: 0, max: 2, step: 0.05 },
+  bloom: { min: 0, max: 1.5, step: 0.05 },
+  colorCycle: { min: 0, max: 3, step: 0.05 },
+  cameraMix: { min: 0, max: 1, step: 0.01 },
+  autoRotateSeconds: { min: 3, max: 120, step: 1 },
+};
+
+interface EffectPanel {
+  sliders: Array<{ key: SliderKey; label: string }>;
+  skeleton: boolean;
+  depthColor: boolean;
+}
+
+const PARTICLE_SLIDERS: EffectPanel["sliders"] = [
+  { key: "particleCount", label: "Count" },
+  { key: "particleSize", label: "Size" },
+  { key: "particleLife", label: "Life" },
+  { key: "particleSpeed", label: "Speed" },
+  { key: "gravity", label: "Gravity" },
+  { key: "turbulence", label: "Turbulence" },
+  { key: "attract", label: "Attract" },
+];
+
+const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
+  liquid: {
+    sliders: [
+      { key: "particleSpeed", label: "Flow" },
+      { key: "turbulence", label: "Warp" },
+      { key: "attract", label: "Filament" },
+      { key: "bloom", label: "Glow" },
+      { key: "colorCycle", label: "Color cycle" },
+    ],
+    skeleton: true,
+    depthColor: false,
+  },
+  particles: {
+    sliders: [...PARTICLE_SLIDERS, { key: "colorCycle", label: "Color cycle" }],
+    skeleton: true,
+    depthColor: false,
+  },
+  constellation: {
+    sliders: [{ key: "colorCycle", label: "Color cycle" }],
+    skeleton: false,
+    depthColor: true,
+  },
+  neon: {
+    sliders: [
+      { key: "bloom", label: "Glow" },
+      { key: "colorCycle", label: "Color cycle" },
+    ],
+    skeleton: false,
+    depthColor: true,
+  },
+  ribbons: {
+    sliders: [
+      { key: "particleSize", label: "Thickness" },
+      { key: "trailFade", label: "Fade" },
+      { key: "colorCycle", label: "Color cycle" },
+    ],
+    skeleton: true,
+    depthColor: true,
+  },
+  embers: {
+    sliders: [
+      { key: "particleCount", label: "Count" },
+      { key: "particleSize", label: "Size" },
+      { key: "particleLife", label: "Life" },
+      { key: "particleSpeed", label: "Speed" },
+      { key: "gravity", label: "Gravity" },
+      { key: "turbulence", label: "Drift" },
+      { key: "trailFade", label: "Fade" },
+      { key: "colorCycle", label: "Color cycle" },
+    ],
+    skeleton: true,
+    depthColor: false,
+  },
+  aurora: {
+    sliders: [
+      ...PARTICLE_SLIDERS,
+      { key: "trailFade", label: "Fade" },
+      { key: "colorCycle", label: "Color cycle" },
+    ],
+    skeleton: true,
+    depthColor: false,
+  },
+  aura: {
+    sliders: [...PARTICLE_SLIDERS, { key: "colorCycle", label: "Color cycle" }],
+    skeleton: true,
+    depthColor: false,
+  },
+  kaleido: {
+    sliders: [...PARTICLE_SLIDERS, { key: "colorCycle", label: "Color cycle" }],
+    skeleton: true,
+    depthColor: false,
+  },
+  pixels: {
+    sliders: [
+      { key: "turbulence", label: "Wobble" },
+      { key: "colorCycle", label: "Color cycle" },
+    ],
+    skeleton: true,
+    depthColor: false,
+  },
+  bubbles: {
+    sliders: [
+      { key: "particleCount", label: "Count" },
+      { key: "particleSize", label: "Size" },
+      { key: "particleSpeed", label: "Drift" },
+      { key: "gravity", label: "Gravity" },
+      { key: "turbulence", label: "Wobble" },
+      { key: "attract", label: "Cling" },
+      { key: "bloom", label: "Shine" },
+      { key: "colorCycle", label: "Color cycle" },
+    ],
+    skeleton: true,
+    depthColor: false,
+  },
+  metaballs: {
+    sliders: [
+      { key: "particleSize", label: "Blob size" },
+      { key: "colorCycle", label: "Color cycle" },
+    ],
+    skeleton: true,
+    depthColor: true,
+  },
+};
 
 export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
   onChange: () => void;
@@ -15,6 +165,7 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
 }): { refresh: () => void } {
   const render = () => {
     const devices = handlers.devices();
+    const panel = EFFECT_PANEL[settings.mode];
     root.innerHTML = `
       <section class="group">
         <h3>Looks</h3>
@@ -22,7 +173,7 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
           <button class="chip" data-look="portrait" type="button">Portrait</button>
           <button class="chip" data-look="rave" type="button">Rave</button>
           <button class="chip" data-look="installation" type="button">Installation</button>
-          <button class="chip" data-look="ghostly" type="button">Ghost</button>
+          <button class="chip" data-look="ghostly" type="button">Bubbles</button>
         </div>
       </section>
       <section class="group">
@@ -54,25 +205,19 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
         <div class="checks">
           <label><input type="checkbox" data-bool="useCustomColors" ${settings.useCustomColors ? "checked" : ""}/> Custom colors</label>
         </div>
-        <div class="color-row">
+        ${settings.useCustomColors ? `<div class="color-row">
           <label>Primary <input type="color" data-key="customPrimary" value="${settings.customPrimary}"/></label>
           <label>Secondary <input type="color" data-key="customSecondary" value="${settings.customSecondary}"/></label>
           <label>Background <input type="color" data-key="customBackground" value="${settings.customBackground}"/></label>
-        </div>
+        </div>` : ""}
       </section>
       <section class="group">
-        <h3>Particles</h3>
-        ${slider("Count", "particleCount", settings.particleCount, 400, 12000, 100)}
-        ${slider("Size", "particleSize", settings.particleSize, 0.4, 6, 0.1)}
-        ${slider("Life", "particleLife", settings.particleLife, 0.3, 6, 0.1)}
-        ${slider("Speed", "particleSpeed", settings.particleSpeed, 0.1, 3, 0.05)}
-        ${slider("Gravity", "gravity", settings.gravity, -2, 2, 0.05)}
-        ${slider("Turbulence", "turbulence", settings.turbulence, 0, 2, 0.05)}
-        ${slider("Trails", "trailFade", settings.trailFade, 0.02, 0.6, 0.01)}
-        ${slider("Attract", "attract", settings.attract, 0, 2, 0.05)}
-        ${slider("Bloom", "bloom", settings.bloom, 0, 1.5, 0.05)}
-        ${slider("Color cycle", "colorCycle", settings.colorCycle, 0, 3, 0.05)}
-        ${slider("Camera opacity", "cameraMix", settings.cameraMix, 0, 1, 0.01)}
+        <h3>${EFFECT_LABELS[settings.mode]}</h3>
+        ${panel.sliders.map((s) => slider(s.label, s.key, settings[s.key], SLIDER_RANGE[s.key])).join("")}
+        ${panel.skeleton || panel.depthColor ? `<div class="checks">
+          ${panel.skeleton ? `<label><input type="checkbox" data-bool="showSkeleton" ${settings.showSkeleton ? "checked" : ""}/> Skeleton overlay</label>` : ""}
+          ${panel.depthColor ? `<label><input type="checkbox" data-bool="depthColor" ${settings.depthColor ? "checked" : ""}/> Depth coloring</label>` : ""}
+        </div>` : ""}
       </section>
       <section class="group">
         <h3>Scene</h3>
@@ -81,6 +226,7 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
             ${BACKGROUND_MODES.map((b) => `<option value="${b}" ${settings.background === b ? "selected" : ""}>${BACKGROUND_LABELS[b]}</option>`).join("")}
           </select>
         </label>
+        ${settings.background === "camera" ? slider("Camera opacity", "cameraMix", settings.cameraMix, SLIDER_RANGE.cameraMix) : ""}
         <label class="row">Model
           <select data-key="modelQuality">
             <option value="lite" ${settings.modelQuality === "lite" ? "selected" : ""}>Lite (faster)</option>
@@ -94,12 +240,12 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
           </select>
         </label>
         <div class="checks">
-          <label><input type="checkbox" data-bool="showSkeleton" ${settings.showSkeleton ? "checked" : ""}/> Skeleton overlay</label>
           <label><input type="checkbox" data-bool="showHud" ${settings.showHud ? "checked" : ""}/> HUD</label>
           <label><input type="checkbox" data-bool="gestures" ${settings.gestures ? "checked" : ""}/> Body gestures</label>
           <label><input type="checkbox" data-bool="audioReactive" ${settings.audioReactive ? "checked" : ""}/> Audio-reactive glow</label>
-          <label><input type="checkbox" data-bool="depthColor" ${settings.depthColor ? "checked" : ""}/> Depth coloring</label>
+          <label><input type="checkbox" data-bool="autoRotate" ${settings.autoRotate ? "checked" : ""}/> Auto-rotate effects</label>
         </div>
+        ${settings.autoRotate ? slider("Seconds per effect", "autoRotateSeconds", settings.autoRotateSeconds, SLIDER_RANGE.autoRotateSeconds) : ""}
       </section>
       <section class="group">
         <h3>Shortcuts</h3>
@@ -124,6 +270,7 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
     const bool = t.getAttribute("data-bool") as keyof Settings | null;
     if (bool && t instanceof HTMLInputElement) {
       (settings as unknown as Record<string, unknown>)[bool] = t.checked;
+      if (bool === "useCustomColors" || bool === "autoRotate") render();
       handlers.onChange();
       return;
     }
@@ -134,11 +281,18 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
       if (label) label.textContent = fmt(Number(t.value));
     } else if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement) {
       const v = t.value;
+      if (key === "mode") {
+        setMode(settings, v as EffectMode);
+        render();
+        handlers.onChange();
+        return;
+      }
       if (key === "rotation" || key === "numPoses") {
         (settings as unknown as Record<string, unknown>)[key] = Number(v);
       } else {
         (settings as unknown as Record<string, unknown>)[key] = v;
       }
+      if (key === "background") render();
     }
     handlers.onChange();
   });
@@ -154,9 +308,9 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
   return { refresh: render };
 }
 
-function slider(label: string, key: string, value: number, min: number, max: number, step: number): string {
+function slider(label: string, key: string, value: number, range: { min: number; max: number; step: number }): string {
   return `<label class="row">${label}<span data-val="${key}">${fmt(value)}</span></label>
-    <input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${value}"/>`;
+    <input type="range" data-key="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}"/>`;
 }
 
 function fmt(n: number): string {

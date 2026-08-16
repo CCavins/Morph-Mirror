@@ -8,7 +8,6 @@ import {
   drawConnector,
   drawConstellation,
   drawFramingGhost,
-  drawGhost,
   drawMetaballs,
   drawMotionBg,
   drawNeon,
@@ -19,13 +18,17 @@ import {
   wristEmitters,
   type DrawCtx,
 } from "./effects";
+import { BubbleEngine } from "./bubbles";
 import { visible } from "../pose";
+
+const PARTICLE_MODES = new Set(["particles", "embers", "aurora", "aura", "kaleido"]);
 
 export class Compositor {
   readonly view: HTMLCanvasElement;
   readonly ctx: CanvasRenderingContext2D;
   readonly liquid = new LiquidRenderer();
   readonly particles = new ParticleEngine();
+  readonly bubbles = new BubbleEngine();
   private attractors: Attractor[] = [];
   private frameCount = 0;
   private trail = 0;
@@ -40,25 +43,30 @@ export class Compositor {
 
   constructor(view: HTMLCanvasElement) {
     this.view = view;
-    const ctx = view.getContext("2d", { alpha: false });
+    const ctx = view.getContext("2d", { alpha: false, desynchronized: true });
     if (!ctx) throw new Error("Could not create display canvas.");
     this.ctx = ctx;
   }
 
-  resize(): void {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+  resize(reduced = false): void {
     const w = Math.max(1, window.innerWidth);
     const h = Math.max(1, window.innerHeight);
-    const pw = Math.round(w * dpr);
-    const ph = Math.round(h * dpr);
+    const dpr = Math.min(reduced ? 1 : 1.5, window.devicePixelRatio || 1);
+    const maxSide = reduced ? 1280 : 1600;
+    const scale = Math.min(dpr, maxSide / Math.max(w, h));
+    const pw = Math.max(1, Math.round(w * scale));
+    const ph = Math.max(1, Math.round(h * scale));
     if (this.view.width !== pw) this.view.width = pw;
     if (this.view.height !== ph) this.view.height = ph;
-    this.view.style.width = `${w}px`;
-    this.view.style.height = `${h}px`;
+    const cssW = `${w}px`;
+    const cssH = `${h}px`;
+    if (this.view.style.width !== cssW) this.view.style.width = cssW;
+    if (this.view.style.height !== cssH) this.view.style.height = cssH;
   }
 
   burst(): void {
     this.particles.burst(this.view.width / 2, this.view.height / 2, Math.min(800, this.particles.count || 800));
+    this.bubbles.burst(this.view.width / 2, this.view.height / 2);
   }
 
   render(opts: {
@@ -93,7 +101,7 @@ export class Compositor {
     this.frameCount++;
     this.updateMotion(frame);
     const fade = clamp(settings.trailFade, 0.04, 0.6);
-    const traily = settings.mode === "ribbons" || settings.mode === "ghost" || settings.mode === "embers" || settings.mode === "aurora";
+    const traily = settings.mode === "ribbons" || settings.mode === "embers" || settings.mode === "aurora";
     const showCamera = settings.background === "camera";
     if (traily && !showCamera) {
       ctx.fillStyle = rgbCss(colors.background, fade);
@@ -116,23 +124,20 @@ export class Compositor {
       ctx.restore();
     }
 
-    const targetCount = reduced ? Math.min(900, settings.particleCount * 0.25) : settings.particleCount;
-    this.particles.setCount(targetCount, w, h, settings);
-
-    const toDisplay = (x: number, y: number) => mapCover(x, y, process.width, process.height, cover);
-    if (this.frameCount % 4 === 0 && frame.mask) {
-      if (settings.mode === "aura") {
-        sampleEdgePoints(frame.mask, frame.maskWidth, frame.maskHeight, 220, toDisplay, this.attractors);
-      } else {
-        sampleMaskPoints(frame.mask, frame.maskWidth, frame.maskHeight, 260, toDisplay, this.attractors);
+    if (PARTICLE_MODES.has(settings.mode)) {
+      const targetCount = reduced ? Math.min(900, settings.particleCount * 0.25) : settings.particleCount;
+      this.particles.setCount(targetCount, w, h, settings);
+      const toDisplay = (x: number, y: number) => mapCover(x, y, process.width, process.height, cover);
+      if (this.frameCount % 4 === 0 && frame.mask) {
+        if (settings.mode === "aura") {
+          sampleEdgePoints(frame.mask, frame.maskWidth, frame.maskHeight, 220, toDisplay, this.attractors);
+        } else {
+          sampleMaskPoints(frame.mask, frame.maskWidth, frame.maskHeight, 260, toDisplay, this.attractors);
+        }
       }
-    }
-    if (!frame.mask || this.attractors.length < 8) {
-      this.attractors = landmarkAttractors(d);
-    }
-
-    const particleModes = new Set(["particles", "embers", "aurora", "aura", "kaleido"]);
-    if (particleModes.has(settings.mode)) {
+      if (!frame.mask || this.attractors.length < 8) {
+        this.attractors = landmarkAttractors(d);
+      }
       const kind = settings.mode === "embers"
         ? "ember"
         : settings.mode === "aurora"
@@ -167,10 +172,7 @@ export class Compositor {
 
     if (settings.mode === "liquid") {
       if (this.liquid.ok) {
-        this.liquid.resize(
-          Math.max(2, Math.round(process.width * 2)),
-          Math.max(2, Math.round(process.height * 2)),
-        );
+        this.liquid.resize(process.width, process.height, reduced ? 480 : 640);
         this.liquid.render({
           mask: frame.mask,
           maskW: frame.maskWidth,
@@ -219,8 +221,9 @@ export class Compositor {
       drawRibbons(d);
     } else if (settings.mode === "pixels") {
       drawPixels(d);
-    } else if (settings.mode === "ghost") {
-      drawGhost(d, process);
+    } else if (settings.mode === "bubbles") {
+      this.bubbles.step(d, dt, reduced);
+      this.bubbles.draw(d, reduced);
     } else if (settings.mode === "metaballs") {
       drawMetaballs(d);
     }

@@ -1,6 +1,6 @@
 # Morph Mirror
 
-A full-screen AR mirror that tracks your body in the browser and turns motion into liquid light and particles. Pose estimation runs on-device with MediaPipe — nothing is uploaded.
+A full-screen AR mirror that tracks your body in the browser and turns motion into liquid light, particles, and bubbles. Pose estimation runs on-device with MediaPipe — nothing is uploaded.
 
 Live: [https://ccavins.github.io/Morph-Mirror/](https://ccavins.github.io/Morph-Mirror/)
 
@@ -12,6 +12,8 @@ Live: [https://ccavins.github.io/Morph-Mirror/](https://ccavins.github.io/Morph-
 
 All tracking stays on your machine. The optional audio-reactive glow is off until you enable it in settings.
 
+Each effect remembers its own sliders, palette, and colors in localStorage. Settings only shows controls that apply to the current effect.
+
 ## Shortcuts
 
 | Key | Action |
@@ -19,6 +21,7 @@ All tracking stays on your machine. The optional audio-reactive glow is off unti
 | `S` or `,` | Settings |
 | `Esc` | Close settings |
 | `1`–`0` | Switch effects |
+| `N` | Next effect |
 | `[` `]` | Cycle color palettes |
 | `B` | Cycle background: solid color, motion graphic, camera |
 | `M` | Toggle mirror |
@@ -32,6 +35,8 @@ All tracking stays on your machine. The optional audio-reactive glow is off unti
 | `L` | Copy a shareable look URL |
 
 Gestures (on by default): both hands up → next effect, hands together → burst, T-pose → next palette.
+
+In **Scene**, **Auto-rotate effects** (off by default) walks through every effect on a timer you set.
 
 ## Local development
 

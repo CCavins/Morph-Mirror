@@ -92,7 +92,7 @@ float vnoise(vec3 p){
 float fbm(vec3 p){
   float a = 0.5;
   float s = 0.0;
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 3; i++) {
     s += vnoise(p) * a;
     p = p * 2.03 + vec3(0.17, 0.31, 0.11);
     a *= 0.5;
@@ -154,23 +154,20 @@ void main(){
   vec3 accum = vec3(0.0);
   float trans = 1.0;
   vec3 rp = vec3(suv, 0.0);
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 3; i++) {
     float di = dens(rp.xy);
     if (di > 0.04 && trans > 0.03) {
       vec3 q = vec3((rp.xy - u_center) * u_scale - flow * (8.0 + float(i) * 3.0), t * 0.32 + rp.z);
-      q.xy += vec2(fbm(q), fbm(q + 2.7)) * 0.35;
       float n = fbm(q);
-      float n2 = fbm(q * 1.55 + n);
-      float swirl = mix(n, n2, 0.4);
-      float fil = smoothstep(0.4, 0.62, swirl) * smoothstep(0.88, 0.58, swirl);
-      vec3 albedo = mix(u_primary, u_secondary, swirl);
-      albedo = mix(albedo, mix(u_glowA, u_glowB, n2), fil * (0.35 + u_filament * 0.25));
-      float a = di * 0.3 * trans;
-      accum += albedo * a * (1.15 - float(i) * 0.12);
-      trans *= 1.0 - di * 0.24;
+      float fil = smoothstep(0.42, 0.7, n);
+      vec3 albedo = mix(u_primary, u_secondary, n);
+      albedo = mix(albedo, mix(u_glowA, u_glowB, n), fil * (0.3 + u_filament * 0.2));
+      float a = di * 0.38 * trans;
+      accum += albedo * a * (1.12 - float(i) * 0.14);
+      trans *= 1.0 - di * 0.28;
     }
-    rp.xy += flow * 0.07;
-    rp.z += 0.12;
+    rp.xy += flow * 0.08;
+    rp.z += 0.16;
   }
 
   float inside = smoothstep(0.1, 0.5, d);
@@ -235,7 +232,8 @@ export class LiquidRenderer {
   private smoothMask: Float32Array | null = null;
   private lastMaskW = 0;
   private lastMaskH = 0;
-  private advectScratch: Float32Array | null = null;
+  private maskTexW = 0;
+  private maskTexH = 0;
   private liquidUniforms: Record<string, WebGLUniformLocation | null> = {};
   private blurUniforms: Record<string, WebGLUniformLocation | null> = {};
   ok = false;
@@ -247,10 +245,27 @@ export class LiquidRenderer {
       alpha: true,
       premultipliedAlpha: true,
       antialias: false,
-      preserveDrawingBuffer: true,
+      preserveDrawingBuffer: false,
+      powerPreference: "high-performance",
     });
     this.gl = gl;
     if (!gl) return;
+    this.canvas.addEventListener("webglcontextlost", (e) => {
+      e.preventDefault();
+      this.ok = false;
+    });
+    this.canvas.addEventListener("webglcontextrestored", () => {
+      try {
+        this.ping = null;
+        this.pong = null;
+        this.maskTexW = 0;
+        this.maskTexH = 0;
+        this.init(gl);
+        this.ok = true;
+      } catch {
+        this.ok = false;
+      }
+    });
     try {
       this.init(gl);
       this.ok = true;
@@ -309,13 +324,26 @@ export class LiquidRenderer {
     return { tex, fbo, w, h };
   }
 
-  resize(w: number, h: number): void {
+  private destroyTarget(gl: WebGL2RenderingContext, t: Target | null): void {
+    if (!t) return;
+    gl.deleteTexture(t.tex);
+    gl.deleteFramebuffer(t.fbo);
+  }
+
+  resize(w: number, h: number, maxSide = 640): void {
+    const s = Math.min(1, maxSide / Math.max(w, h));
+    w = Math.max(2, Math.round(w * s));
+    h = Math.max(2, Math.round(h * s));
     if (this.canvas.width !== w) this.canvas.width = w;
     if (this.canvas.height !== h) this.canvas.height = h;
     const gl = this.gl;
     if (!gl || !this.ok) return;
     if (!this.ping || this.ping.w !== w || this.ping.h !== h) {
       try {
+        this.destroyTarget(gl, this.ping);
+        this.destroyTarget(gl, this.pong);
+        this.ping = null;
+        this.pong = null;
         this.ping = this.makeTarget(gl, w, h);
         this.pong = this.makeTarget(gl, w, h);
       } catch {
@@ -368,25 +396,9 @@ export class LiquidRenderer {
       if (!this.smoothMask || this.smoothMask.length !== n) {
         this.smoothMask = new Float32Array(n);
         this.smoothMask.set(opts.mask);
-        this.advectScratch = new Float32Array(n);
       } else {
         const prev = this.smoothMask;
-        const next = this.advectScratch ?? new Float32Array(n);
-        this.advectScratch = next;
-        const mw = opts.maskW;
-        const mh = opts.maskH;
-        const ax = opts.flow[0] * mw * 2.8;
-        const ay = -opts.flow[1] * mh * 2.8;
-        for (let y = 0; y < mh; y++) {
-          for (let x = 0; x < mw; x++) {
-            const i = y * mw + x;
-            const sx = x - ax;
-            const sy = y - ay;
-            const smeared = bilinear(prev, mw, mh, sx, sy);
-            next[i] = smeared * 0.62 + opts.mask[i] * 0.38;
-          }
-        }
-        prev.set(next);
+        for (let i = 0; i < n; i++) prev[i] = prev[i] * 0.72 + opts.mask[i] * 0.28;
       }
     } else if (this.smoothMask) {
       for (let i = 0; i < this.smoothMask.length; i++) this.smoothMask[i] *= 0.88;
@@ -399,17 +411,33 @@ export class LiquidRenderer {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.maskTex);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-      gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.R8,
-        this.lastMaskW,
-        this.lastMaskH,
-        0,
-        gl.RED,
-        gl.UNSIGNED_BYTE,
-        this.maskBytes,
-      );
+      if (this.maskTexW !== this.lastMaskW || this.maskTexH !== this.lastMaskH) {
+        gl.texImage2D(
+          gl.TEXTURE_2D,
+          0,
+          gl.R8,
+          this.lastMaskW,
+          this.lastMaskH,
+          0,
+          gl.RED,
+          gl.UNSIGNED_BYTE,
+          this.maskBytes,
+        );
+        this.maskTexW = this.lastMaskW;
+        this.maskTexH = this.lastMaskH;
+      } else {
+        gl.texSubImage2D(
+          gl.TEXTURE_2D,
+          0,
+          0,
+          0,
+          this.lastMaskW,
+          this.lastMaskH,
+          gl.RED,
+          gl.UNSIGNED_BYTE,
+          this.maskBytes,
+        );
+      }
     }
 
     this.blurPass(gl, this.maskTex, this.ping, 1 / w, 0, 1, 2.6);
@@ -472,20 +500,4 @@ export class LiquidRenderer {
     gl.uniform1f(this.blurUniforms.u_spread, spread);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
-}
-
-function bilinear(m: Float32Array, w: number, h: number, x: number, y: number): number {
-  const x0 = Math.max(0, Math.min(w - 1.001, x));
-  const y0 = Math.max(0, Math.min(h - 1.001, y));
-  const ix = Math.floor(x0);
-  const iy = Math.floor(y0);
-  const fx = x0 - ix;
-  const fy = y0 - iy;
-  const x1 = Math.min(w - 1, ix + 1);
-  const y1 = Math.min(h - 1, iy + 1);
-  const a = m[iy * w + ix];
-  const b = m[iy * w + x1];
-  const c = m[y1 * w + ix];
-  const d = m[y1 * w + x1];
-  return a * (1 - fx) * (1 - fy) + b * fx * (1 - fy) + c * (1 - fx) * fy + d * fx * fy;
 }

@@ -111,6 +111,8 @@ html, body {
   pointer-events: auto;
 }
 
+.panel[hidden] { display: none; }
+
 .panel, .gate, .toast { cursor: auto; }
 
 .panel-head {
