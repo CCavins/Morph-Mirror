@@ -331,59 +331,6 @@ export function drawMetaballs(d: DrawCtx): void {
   d.ctx.restore();
 }
 
-export function drawConnector(d: DrawCtx): void {
-  if (d.frame.poses.length < 2) return;
-  const bodies = d.frame.poses.filter(isFullBody);
-  if (bodies.length < 2) return;
-  const a = midHip(bodies[0], d);
-  const b = midHip(bodies[1], d);
-  if (!a || !b) return;
-  const span = Math.hypot(a.x - b.x, a.y - b.y);
-  if (span < Math.min(d.w, d.h) * 0.18) return;
-  const { ctx, colors } = d;
-  ctx.save();
-  ctx.globalCompositeOperation = "lighter";
-  const mx = (a.x + b.x) / 2;
-  const my = (a.y + b.y) / 2 + Math.sin(d.time * 3) * 18;
-  ctx.strokeStyle = rgbCss(colors.glowA, 0.55);
-  ctx.lineWidth = 2.5;
-  ctx.shadowBlur = 16;
-  ctx.shadowColor = rgbCss(colors.glowB, 1);
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.quadraticCurveTo(mx, my, b.x, b.y);
-  ctx.stroke();
-  ctx.restore();
-}
-
-function isFullBody(pose: BodyPose): boolean {
-  const ls = pose.landmarks[LM.leftShoulder];
-  const rs = pose.landmarks[LM.rightShoulder];
-  const lh = pose.landmarks[LM.leftHip];
-  const rh = pose.landmarks[LM.rightHip];
-  const shoulders = visible(ls, 0.45) && visible(rs, 0.45) && Math.hypot(ls.x - rs.x, ls.y - rs.y) > 0.07;
-  const hips = visible(lh, 0.35) && visible(rh, 0.35) && Math.hypot(lh.x - rh.x, lh.y - rh.y) > 0.05;
-  return shoulders && hips;
-}
-
-function midHip(pose: BodyPose, d: DrawCtx): { x: number; y: number } | null {
-  const l = pose.landmarks[LM.leftHip];
-  const r = pose.landmarks[LM.rightHip];
-  const ls = pose.landmarks[LM.leftShoulder];
-  const rs = pose.landmarks[LM.rightShoulder];
-  if (visible(l, 0.35) && visible(r, 0.35)) {
-    const a = toScreen(l, d);
-    const b = toScreen(r, d);
-    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-  }
-  if (visible(ls, 0.35) && visible(rs, 0.35)) {
-    const a = toScreen(ls, d);
-    const b = toScreen(rs, d);
-    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-  }
-  return null;
-}
-
 export function drawMotionBg(
   ctx: CanvasRenderingContext2D,
   w: number,

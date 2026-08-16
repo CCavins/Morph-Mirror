@@ -5,7 +5,6 @@ import { resolveColors, type ActiveColors } from "./palettes";
 import { LiquidRenderer } from "./liquid";
 import { ParticleEngine, sampleEdgeGrid, sampleMaskGrid, type Attractor } from "./particles";
 import {
-  drawConnector,
   drawConstellation,
   drawMetaballs,
   drawMotionBg,
@@ -238,8 +237,6 @@ export class Compositor {
     } else if (settings.mode === "metaballs") {
       drawMetaballs(d);
     }
-
-    drawConnector(d);
 
     if (settings.showSkeleton && settings.mode !== "neon" && settings.mode !== "constellation") {
       drawSkeleton(d, 0.7);
