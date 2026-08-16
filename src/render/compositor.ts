@@ -247,7 +247,11 @@ export class Compositor {
       drawSkeleton(d, 0.7);
     }
 
-    this.ghostAlpha = lerpToward(this.ghostAlpha, frame.hasPerson ? 0 : 1, dt * 2.2);
+    if (frame.hasPerson) {
+      this.ghostAlpha = 0;
+    } else {
+      this.ghostAlpha = lerpToward(this.ghostAlpha, 1, dt * 1.4);
+    }
     drawFramingGhost(d, this.ghostAlpha);
 
     return colors;

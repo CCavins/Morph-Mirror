@@ -189,7 +189,7 @@ export class PoseTracker {
         mask,
         maskWidth,
         maskHeight,
-        hasPerson: poses.some((p) => p.landmarks.some((l) => l.vis > 0.5)),
+        hasPerson: personPresent(poses, mask, maskWidth, maskHeight),
       };
       return this.last;
     } finally {
@@ -244,6 +244,28 @@ export class PoseTracker {
 
 export function visible(lm: Landmark | undefined, min = 0.45): lm is Landmark {
   return !!lm && lm.vis >= min;
+}
+
+function personPresent(
+  poses: BodyPose[],
+  mask: Float32Array | null,
+  mw: number,
+  mh: number,
+): boolean {
+  if (poses.some((p) => p.landmarks.some((l) => l.vis > 0.45))) return true;
+  if (!mask || mw < 8 || mh < 8) return false;
+  let hits = 0;
+  const step = Math.max(2, (Math.min(mw, mh) / 24) | 0);
+  for (let y = 0; y < mh; y += step) {
+    const row = y * mw;
+    for (let x = 0; x < mw; x += step) {
+      if (mask[row + x] > 0.4) {
+        hits += 1;
+        if (hits >= 8) return true;
+      }
+    }
+  }
+  return false;
 }
 
 function stampHands(mask: Float32Array, mw: number, mh: number, hands: Landmark[][]): void {
