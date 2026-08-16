@@ -7,7 +7,7 @@ Live: [https://ccavins.github.io/Morph-Mirror/](https://ccavins.github.io/Morph-
 ## Use it
 
 1. Open the site in Chrome or Edge (Safari works; grant camera access).
-2. Click **Enter the Mirror**.
+2. Click **Enter the Mirror**. On a phone, use the **Settings** button in the corner (or **S** on a keyboard).
 3. Stand so your upper body or full figure is in frame. The camera is mirrored like a real mirror.
 
 All tracking stays on your machine. The optional audio-reactive glow is off until you enable it in settings.
@@ -20,7 +20,7 @@ Each effect remembers its own sliders, palette, and colors in localStorage. Sett
 | --- | --- |
 | `S` or `,` | Settings |
 | `Esc` | Close settings |
-| `1`–`0` | Switch effects |
+| `1`–`9`, `0`, `-`, `=` | Switch effects (Liquid … Metaballs) |
 | `N` | Next effect |
 | `[` `]` | Cycle color palettes |
 | `B` | Cycle background: solid color, motion graphic, camera |

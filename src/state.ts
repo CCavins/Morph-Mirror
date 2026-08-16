@@ -37,11 +37,39 @@ export const BASE_EFFECT_LOOK: EffectLook = {
 
 export function emptyLooks(): Record<EffectMode, EffectLook> {
   const looks = Object.fromEntries(EFFECT_MODES.map((m) => [m, { ...BASE_EFFECT_LOOK }])) as Record<EffectMode, EffectLook>;
-  looks.bubbles.palette = "ice";
-  looks.bubbles.particleSize = 2;
-  looks.bubbles.bloom = 0.9;
-  looks.bubbles.attract = 0.8;
-  looks.bubbles.turbulence = 0.35;
+  Object.assign(looks.liquid, { palette: "aurora", bloom: 0.85, turbulence: 0.4, particleSpeed: 1 });
+  Object.assign(looks.particles, { palette: "aurora", particleCount: 3400, attract: 0.9 });
+  Object.assign(looks.constellation, { palette: "gold", bloom: 0.9, depthColor: true });
+  Object.assign(looks.neon, { palette: "plasma", bloom: 1.15, depthColor: true });
+  Object.assign(looks.ribbons, { palette: "ocean", particleSize: 2.2, trailFade: 0.18, depthColor: true });
+  Object.assign(looks.embers, {
+    palette: "ember",
+    particleCount: 2200,
+    particleLife: 1.15,
+    gravity: -0.25,
+    particleSpeed: 1.15,
+    trailFade: 0.14,
+  });
+  Object.assign(looks.aurora, {
+    palette: "aurora",
+    particleCount: 3000,
+    turbulence: 0.9,
+    trailFade: 0.16,
+    attract: 0.55,
+    particleSpeed: 0.8,
+  });
+  Object.assign(looks.aura, { palette: "ghost", particleCount: 4000, attract: 1.15, particleSize: 1.3, turbulence: 0.25 });
+  Object.assign(looks.kaleido, { palette: "plasma", particleCount: 1200, attract: 0.85, turbulence: 0.55 });
+  Object.assign(looks.pixels, { palette: "toxic", turbulence: 0.35 });
+  Object.assign(looks.bubbles, {
+    palette: "ice",
+    particleSize: 2.4,
+    bloom: 0.8,
+    attract: 1.25,
+    turbulence: 0.12,
+    particleSpeed: 0.55,
+  });
+  Object.assign(looks.metaballs, { palette: "ocean", particleSize: 2.2, bloom: 0.7, depthColor: true });
   return looks;
 }
 
@@ -64,12 +92,13 @@ export function setMode(settings: Settings, mode: EffectMode): boolean {
 }
 
 export function defaultSettings(): Settings {
+  const effectLooks = emptyLooks();
   return {
     deviceId: "",
     mirror: true,
     rotation: 0,
     mode: "liquid",
-    ...BASE_EFFECT_LOOK,
+    ...effectLooks.liquid,
     cameraMix: 1,
     background: "solid",
     showHud: true,
@@ -80,7 +109,7 @@ export function defaultSettings(): Settings {
     audioReactive: false,
     autoRotate: false,
     autoRotateSeconds: 12,
-    effectLooks: emptyLooks(),
+    effectLooks,
   };
 }
 
@@ -239,9 +268,10 @@ export function applyLookPreset(settings: Settings, name: string): void {
       settings.palette = "ice";
       settings.cameraMix = 1;
       settings.trailFade = 0.08;
-      settings.bloom = 0.85;
-      settings.particleSize = 2.1;
-      settings.attract = 0.85;
+      settings.bloom = 0.8;
+      settings.particleSize = 2.4;
+      settings.attract = 1.25;
+      settings.turbulence = 0.12;
       settings.background = "solid";
       break;
     default:

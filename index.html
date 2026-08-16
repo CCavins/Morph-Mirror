@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#070A18" />
     <meta name="description" content="A pose-driven AR mirror of liquid light and particles. Tracking stays on your device." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Morph Mirror" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta property="og:title" content="Morph Mirror" />
+    <meta property="og:description" content="A pose-driven AR mirror of liquid light and particles. Tracking stays on your device." />
+    <meta property="og:type" content="website" />
     <title>Morph Mirror</title>
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="./manifest.webmanifest" />
@@ -22,11 +28,13 @@
       </div>
       <div class="hud-bottom">
         <p id="mode-label" class="mode-label">Liquid Body</p>
-        <p class="hint">S settings · B background · 1–0 effects</p>
+        <p class="hint">S settings · B background · N next effect</p>
       </div>
       <div id="rec-dot" class="rec-dot" hidden>REC</div>
     </div>
 
+    <button type="button" id="open-settings" class="fab" hidden>Settings</button>
+    <div id="settings-scrim" class="scrim" hidden></div>
     <aside id="settings" class="panel" hidden>
       <header class="panel-head">
         <h2>Settings</h2>

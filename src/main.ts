@@ -35,6 +35,8 @@ const gateError = document.getElementById("gate-error") as HTMLElement;
 const settingsEl = document.getElementById("settings") as HTMLElement;
 const settingsBody = document.getElementById("settings-body") as HTMLElement;
 const closeSettings = document.getElementById("close-settings") as HTMLButtonElement;
+const openSettings = document.getElementById("open-settings") as HTMLButtonElement;
+const settingsScrim = document.getElementById("settings-scrim") as HTMLElement;
 
 let running = false;
 let last = performance.now();
@@ -93,7 +95,6 @@ const MASK_MODES = new Set([
   "liquid",
   "pixels",
   "particles",
-  "embers",
   "aurora",
   "aura",
   "kaleido",
@@ -102,6 +103,8 @@ const MASK_MODES = new Set([
 
 function setSettingsOpen(open: boolean): void {
   settingsEl.hidden = !open;
+  settingsScrim.hidden = !open;
+  if (running) openSettings.hidden = open;
   if (open) ui.refresh();
 }
 
@@ -186,7 +189,13 @@ function loop(now: number): void {
   compositor.resize(reduced);
   const drawn = camera.drawProcess(settings.mirror, settings.rotation, reduced ? 480 : 640);
   if (drawn && !settings.frozen) {
-    pose.detect(camera.process, now, reduced ? 50 : 33, MASK_MODES.has(settings.mode));
+    pose.detect(
+      camera.process,
+      now,
+      reduced ? 50 : 33,
+      MASK_MODES.has(settings.mode),
+      MASK_MODES.has(settings.mode) && !reduced,
+    );
   }
   const frame = pose.frame;
 
@@ -255,6 +264,7 @@ async function start(): Promise<void> {
     refreshUi();
     gate.hidden = true;
     running = true;
+    openSettings.hidden = false;
     last = performance.now();
     await requestWake();
     if (settings.audioReactive) {
@@ -263,8 +273,13 @@ async function start(): Promise<void> {
     paintHud();
     requestAnimationFrame(loop);
   } catch (err) {
+    camera.stop();
+    audio.stop();
     gateError.hidden = false;
-    gateError.textContent = cameraErrorMessage(err);
+    const msg = err instanceof Error ? err.message : "";
+    gateError.textContent = /mediapipe|body tracker|wasm/i.test(msg)
+      ? "Could not load the body tracker. Check your connection and try again."
+      : cameraErrorMessage(err);
     enter.disabled = false;
     enter.textContent = "Enter the Mirror";
   }
@@ -272,6 +287,8 @@ async function start(): Promise<void> {
 
 enter.addEventListener("click", () => { void start(); });
 closeSettings.addEventListener("click", () => setSettingsOpen(false));
+openSettings.addEventListener("click", () => setSettingsOpen(true));
+settingsScrim.addEventListener("click", () => setSettingsOpen(false));
 
 view.addEventListener("dblclick", () => {
   settings.showHud = !settings.showHud;
@@ -286,6 +303,13 @@ document.addEventListener("visibilitychange", () => {
   }
   void camera.resumePlayback();
   void requestWake();
+});
+
+window.addEventListener("pagehide", (e) => {
+  if (e.persisted) return;
+  camera.stop();
+  audio.stop();
+  if (recorder.recording) recorder.stop();
 });
 
 navigator.mediaDevices?.addEventListener("devicechange", () => {
@@ -320,6 +344,14 @@ window.addEventListener("keydown", (e) => {
   }
   if (k === "0") {
     changeMode(EFFECT_MODES[9]);
+    return;
+  }
+  if (k === "-") {
+    changeMode(EFFECT_MODES[10]);
+    return;
+  }
+  if (k === "=") {
+    changeMode(EFFECT_MODES[11]);
     return;
   }
   if (k === "[") {
@@ -366,8 +398,13 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (k === "f" || k === "F") {
-    if (!document.fullscreenElement) void document.documentElement.requestFullscreen();
-    else void document.exitFullscreen();
+    if (!document.fullscreenElement) {
+      void document.documentElement.requestFullscreen?.().catch(() => {
+        toast("Fullscreen was blocked");
+      });
+    } else {
+      void document.exitFullscreen();
+    }
     return;
   }
   if (k === "h" || k === "H") {
@@ -388,16 +425,24 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (k === "v" || k === "V") {
-    const on = recorder.toggle(view);
-    toast(on ? "Recording…" : "Clip saved");
+    if (recorder.recording) {
+      recorder.stop();
+      toast("Clip saved");
+    } else if (recorder.start(view)) {
+      toast("Recording…");
+    } else {
+      toast("Recording is not supported here");
+    }
     paintHud();
     return;
   }
   if (k === "l" || k === "L") {
     const url = lookUrl(settings);
-    void navigator.clipboard?.writeText(url);
-    toast("Look link copied");
     history.replaceState(null, "", url);
+    void navigator.clipboard?.writeText(url).then(
+      () => toast("Look link copied"),
+      () => toast("Look link is in the address bar"),
+    );
     return;
   }
   if (k === "n" || k === "N") {

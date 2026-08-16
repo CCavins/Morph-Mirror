@@ -3,7 +3,7 @@ import { LM, VIS_MIN } from "../types";
 import { clamp, coverFit, mapCover, rgbCss } from "../math";
 import { resolveColors, type ActiveColors } from "./palettes";
 import { LiquidRenderer } from "./liquid";
-import { ParticleEngine, sampleEdgePoints, sampleMaskPoints, type Attractor } from "./particles";
+import { ParticleEngine, sampleEdgeGrid, sampleMaskGrid, type Attractor } from "./particles";
 import {
   drawConnector,
   drawConstellation,
@@ -125,18 +125,21 @@ export class Compositor {
     }
 
     if (PARTICLE_MODES.has(settings.mode)) {
-      const targetCount = reduced ? Math.min(900, settings.particleCount * 0.25) : settings.particleCount;
+      const rawCount = reduced ? Math.min(900, settings.particleCount * 0.25) : settings.particleCount;
+      const targetCount = settings.mode === "kaleido"
+        ? Math.min(reduced ? 480 : 1400, rawCount)
+        : rawCount;
       this.particles.setCount(targetCount, w, h, settings);
       const toDisplay = (x: number, y: number) => mapCover(x, y, process.width, process.height, cover);
-      if (this.frameCount % 4 === 0 && frame.mask) {
+      if (frame.mask) {
         if (settings.mode === "aura") {
-          sampleEdgePoints(frame.mask, frame.maskWidth, frame.maskHeight, 220, toDisplay, this.attractors);
+          sampleEdgeGrid(frame.mask, frame.maskWidth, frame.maskHeight, toDisplay, this.attractors);
         } else {
-          sampleMaskPoints(frame.mask, frame.maskWidth, frame.maskHeight, 260, toDisplay, this.attractors);
+          sampleMaskGrid(frame.mask, frame.maskWidth, frame.maskHeight, reduced ? 14 : 18, reduced ? 18 : 24, toDisplay, this.attractors);
         }
       }
       if (!frame.mask || this.attractors.length < 8) {
-        this.attractors = landmarkAttractors(d);
+        landmarkAttractors(d, this.attractors);
       }
       const kind = settings.mode === "embers"
         ? "ember"
@@ -151,21 +154,31 @@ export class Compositor {
         for (const pose of frame.poses) {
           for (const e of wristEmitters(pose, d)) {
             const spd = Math.hypot(e.vx, e.vy);
-            const n = spd > 12 ? 10 : 3;
-            this.particles.emitFrom(e.x, e.y, e.vx * 0.4, e.vy * 0.4 - 40, settings, n);
+            if (spd < 16) {
+              if (this.frameCount % 4 === 0) this.particles.emitFrom(e.x, e.y, e.vx * 0.2, e.vy * 0.2 - 28, settings, 1);
+            } else {
+              const n = spd > 48 ? 9 : 4;
+              this.particles.emitFrom(e.x, e.y, e.vx * 0.35, e.vy * 0.35 - 36, settings, n);
+            }
           }
         }
       }
-      this.particles.step(dt, w, h, settings, this.attractors, kind, audio);
+      this.particles.step(dt, w, h, settings, this.attractors, kind, audio, time);
+      const kaleido = settings.mode === "kaleido";
+      const kc = kaleido
+        ? mapCover(this.center[0], 1 - this.center[1], process.width, process.height, cover)
+        : { x: w / 2, y: h / 2 };
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       this.particles.draw(
         ctx,
         rgbCss(colors.primary, 0.9),
         rgbCss(colors.secondary, 0.9),
-        settings.mode === "kaleido",
+        kaleido,
         w,
         h,
+        kc.x,
+        kc.y,
       );
       ctx.restore();
     }
@@ -198,8 +211,8 @@ export class Compositor {
           handLv: this.handLv,
           handRv: this.handRv,
           light: [
-            0.42 - this.flow[0] * 14,
-            0.22 - this.flow[1] * 14,
+            0.42 - this.flow[0] * 6,
+            0.22 - this.flow[1] * 6,
             0.82,
           ],
         });
@@ -273,10 +286,22 @@ export class Compositor {
       cy /= n;
       vx /= n;
       vy /= n;
-      this.center[0] = lerpToward(this.center[0], cx, 0.35);
-      this.center[1] = lerpToward(this.center[1], 1 - cy, 0.35);
-      this.flow[0] = clamp(this.flow[0] * 0.72 + vx * 0.28, -0.12, 0.12);
-      this.flow[1] = clamp(this.flow[1] * 0.72 + -vy * 0.28, -0.12, 0.12);
+      const cdx = cx - this.center[0];
+      const cdy = 1 - cy - this.center[1];
+      const cDist = Math.hypot(cdx, cdy);
+      const cK = cDist < 0.004 ? 0.035 : cDist < 0.014 ? 0.12 : 0.26;
+      this.center[0] += cdx * cK;
+      this.center[1] += cdy * cK;
+      const spd = Math.hypot(vx, vy);
+      const gate = spd < 0.0015 ? 0 : Math.min(1, (spd - 0.0015) / 0.0035);
+      vx *= gate;
+      vy *= gate;
+      this.flow[0] = clamp(this.flow[0] * 0.88 + vx * 0.12, -0.12, 0.12);
+      this.flow[1] = clamp(this.flow[1] * 0.88 + -vy * 0.12, -0.12, 0.12);
+      if (gate === 0) {
+        this.flow[0] *= 0.8;
+        this.flow[1] *= 0.8;
+      }
     } else {
       this.flow[0] *= 0.88;
       this.flow[1] *= 0.88;
@@ -287,22 +312,30 @@ export class Compositor {
     const lp = pose.prev[LM.leftWrist];
     const rp = pose.prev[LM.rightWrist];
     if (visible(lw, VIS_MIN)) {
-      this.handL[0] = lw.x;
-      this.handL[1] = 1 - lw.y;
+      this.handL[0] = lerpToward(this.handL[0], lw.x, 0.16);
+      this.handL[1] = lerpToward(this.handL[1], 1 - lw.y, 0.16);
       if (lp) {
-        this.handLv[0] = this.handLv[0] * 0.6 + (lw.x - lp.x) * 0.4;
-        this.handLv[1] = this.handLv[1] * 0.6 + -(lw.y - lp.y) * 0.4;
+        const hvx = lw.x - lp.x;
+        const hvy = -(lw.y - lp.y);
+        const hsp = Math.hypot(hvx, hvy);
+        const hg = hsp < 0.0022 ? 0 : Math.min(1, (hsp - 0.0022) / 0.004);
+        this.handLv[0] = this.handLv[0] * 0.78 + hvx * hg * 0.22;
+        this.handLv[1] = this.handLv[1] * 0.78 + hvy * hg * 0.22;
       }
     } else {
       this.handLv[0] *= 0.85;
       this.handLv[1] *= 0.85;
     }
     if (visible(rw, VIS_MIN)) {
-      this.handR[0] = rw.x;
-      this.handR[1] = 1 - rw.y;
+      this.handR[0] = lerpToward(this.handR[0], rw.x, 0.16);
+      this.handR[1] = lerpToward(this.handR[1], 1 - rw.y, 0.16);
       if (rp) {
-        this.handRv[0] = this.handRv[0] * 0.6 + (rw.x - rp.x) * 0.4;
-        this.handRv[1] = this.handRv[1] * 0.6 + -(rw.y - rp.y) * 0.4;
+        const hvx = rw.x - rp.x;
+        const hvy = -(rw.y - rp.y);
+        const hsp = Math.hypot(hvx, hvy);
+        const hg = hsp < 0.0022 ? 0 : Math.min(1, (hsp - 0.0022) / 0.004);
+        this.handRv[0] = this.handRv[0] * 0.78 + hvx * hg * 0.22;
+        this.handRv[1] = this.handRv[1] * 0.78 + hvy * hg * 0.22;
       }
     } else {
       this.handRv[0] *= 0.85;

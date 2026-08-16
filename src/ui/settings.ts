@@ -73,7 +73,10 @@ const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
     depthColor: false,
   },
   constellation: {
-    sliders: [{ key: "colorCycle", label: "Color cycle" }],
+    sliders: [
+      { key: "bloom", label: "Glow" },
+      { key: "colorCycle", label: "Color cycle" },
+    ],
     skeleton: false,
     depthColor: true,
   },
@@ -89,6 +92,7 @@ const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
     sliders: [
       { key: "particleSize", label: "Thickness" },
       { key: "trailFade", label: "Fade" },
+      { key: "bloom", label: "Glow" },
       { key: "colorCycle", label: "Color cycle" },
     ],
     skeleton: true,
@@ -137,7 +141,6 @@ const EFFECT_PANEL: Record<EffectMode, EffectPanel> = {
   },
   bubbles: {
     sliders: [
-      { key: "particleCount", label: "Count" },
       { key: "particleSize", label: "Size" },
       { key: "particleSpeed", label: "Drift" },
       { key: "gravity", label: "Gravity" },
@@ -251,7 +254,7 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
         <h3>Shortcuts</h3>
         <ul class="shortcuts">
           <li><b>S</b> or <b>,</b> toggle this panel · <b>Esc</b> close</li>
-          <li><b>1–0</b> effects · <b>[ ]</b> palettes</li>
+          <li><b>1–9</b> <b>0</b> <b>-</b> <b>=</b> effects · <b>N</b> next · <b>[ ]</b> palettes</li>
           <li><b>B</b> background (solid / motion / camera)</li>
           <li><b>M</b> mirror · <b>R</b> rotate · <b>C</b> camera</li>
           <li><b>F</b> fullscreen · <b>H</b> HUD · <b>Space</b> freeze</li>

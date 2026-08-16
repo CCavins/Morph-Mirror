@@ -109,7 +109,19 @@ vec2 localFlow(vec2 uv){
   vec2 dR = uv - u_handR;
   float wL = exp(-dot(dL, dL) * 22.0);
   float wR = exp(-dot(dR, dR) * 22.0);
-  return u_flow + u_handLv * wL * 1.8 + u_handRv * wR * 1.8;
+  float gF = smoothstep(0.0022, 0.01, length(u_flow));
+  float gL = smoothstep(0.0025, 0.012, length(u_handLv));
+  float gR = smoothstep(0.0025, 0.012, length(u_handRv));
+  return u_flow * gF + u_handLv * wL * 1.8 * gL + u_handRv * wR * 1.8 * gR;
+}
+
+vec2 maskGrad(vec2 uv){
+  vec2 px = 1.0 / u_resolution;
+  float l = dens(uv - vec2(px.x * 2.2, 0.0));
+  float r = dens(uv + vec2(px.x * 2.2, 0.0));
+  float u = dens(uv - vec2(0.0, px.y * 2.2));
+  float d = dens(uv + vec2(0.0, px.y * 2.2));
+  return vec2(l - r, u - d);
 }
 
 void main(){
@@ -118,10 +130,21 @@ void main(){
   vec2 flow = localFlow(uv);
   float flowMag = length(flow);
 
-  vec3 wp = vec3(uv * 1.4 - flow * 6.0, t * 0.28);
-  vec2 warp = vec2(fbm(wp), fbm(wp + vec3(5.2, 1.7, 0.4))) * 2.0 - 1.0;
-  vec2 suv = uv - flow * (4.5 + flowMag * 18.0);
-  suv += warp * (0.012 + u_warp * 0.02 + flowMag * 0.08);
+  float d0 = dens(uv);
+  vec2 g0 = maskGrad(uv);
+  float gLen = length(g0);
+  vec2 nrm = g0 / max(gLen, 1e-5);
+  vec2 tgt = vec2(-nrm.y, nrm.x);
+  float edge = smoothstep(0.028, 0.12, gLen)
+    * smoothstep(0.02, 0.18, d0)
+    * (1.0 - smoothstep(0.58, 0.94, d0));
+
+  vec3 wp = vec3(uv * 2.35 + nrm * 0.35, t * 0.42);
+  float nEdge = fbm(wp) * 2.0 - 1.0;
+  float nTan = fbm(wp + vec3(4.2, 1.8, 0.9)) * 2.0 - 1.0;
+  float amp = (0.0058 + u_warp * 0.015) * edge;
+  vec2 suv = uv + nrm * nEdge * amp + tgt * nTan * amp * 0.7;
+  suv -= flow * edge * (1.6 + flowMag * 9.0);
 
   float d = dens(suv);
   vec2 px = 1.0 / u_resolution;
@@ -137,7 +160,7 @@ void main(){
     0.28 + d * 0.85
   ));
   vec3 V = vec3(0.0, 0.0, 1.0);
-  vec3 L = normalize(u_light + vec3(-flow.x, -flow.y, 0.0) * 7.0);
+  vec3 L = normalize(u_light + vec3(-flow.x, -flow.y, 0.0) * 3.5);
   vec3 H = normalize(L + V);
   float ndl = max(0.0, dot(N, L));
   float spec = pow(max(0.0, dot(N, H)), 42.0 + u_bloom * 40.0);
@@ -157,7 +180,7 @@ void main(){
   for (int i = 0; i < 3; i++) {
     float di = dens(rp.xy);
     if (di > 0.04 && trans > 0.03) {
-      vec3 q = vec3((rp.xy - u_center) * u_scale - flow * (8.0 + float(i) * 3.0), t * 0.32 + rp.z);
+      vec3 q = vec3((rp.xy - u_center) * u_scale - flow * (3.0 + float(i) * 1.4), t * 0.32 + rp.z);
       float n = fbm(q);
       float fil = smoothstep(0.42, 0.7, n);
       vec3 albedo = mix(u_primary, u_secondary, n);
@@ -234,6 +257,7 @@ export class LiquidRenderer {
   private lastMaskH = 0;
   private maskTexW = 0;
   private maskTexH = 0;
+  private maskMotion = 0;
   private liquidUniforms: Record<string, WebGLUniformLocation | null> = {};
   private blurUniforms: Record<string, WebGLUniformLocation | null> = {};
   ok = false;
@@ -396,9 +420,22 @@ export class LiquidRenderer {
       if (!this.smoothMask || this.smoothMask.length !== n) {
         this.smoothMask = new Float32Array(n);
         this.smoothMask.set(opts.mask);
+        this.maskMotion = 1;
       } else {
         const prev = this.smoothMask;
-        for (let i = 0; i < n; i++) prev[i] = prev[i] * 0.72 + opts.mask[i] * 0.28;
+        const cur = opts.mask;
+        let sad = 0;
+        const stride = n > 24000 ? 4 : 2;
+        for (let i = 0; i < n; i += stride) sad += Math.abs(cur[i] - prev[i]);
+        const mean = sad / Math.ceil(n / stride);
+        this.maskMotion = this.maskMotion * 0.72 + mean * 0.28;
+        const k = Math.min(0.4, Math.max(0.04, 0.04 + this.maskMotion * 3.4));
+        const dead = this.maskMotion < 0.038 ? 0.08 : 0.018;
+        const leak = k * 0.12;
+        for (let i = 0; i < n; i++) {
+          const delta = cur[i] - prev[i];
+          prev[i] += delta * (delta > dead || delta < -dead ? k : leak);
+        }
       }
     } else if (this.smoothMask) {
       for (let i = 0; i < this.smoothMask.length; i++) this.smoothMask[i] *= 0.88;
@@ -440,8 +477,8 @@ export class LiquidRenderer {
       }
     }
 
-    this.blurPass(gl, this.maskTex, this.ping, 1 / w, 0, 1, 2.6);
-    this.blurPass(gl, this.ping.tex, this.pong, 0, 1 / h, 0, 2.6);
+    this.blurPass(gl, this.maskTex, this.ping, 1 / w, 0, 1, 3.2);
+    this.blurPass(gl, this.ping.tex, this.pong, 0, 1 / h, 0, 3.2);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, w, h);
