@@ -1,0 +1,19 @@
+{
+  "name": "Morph Mirror",
+  "short_name": "Morph",
+  "description": "A pose-driven AR mirror of liquid light and particles.",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#070A18",
+  "theme_color": "#070A18",
+  "start_url": "./",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
