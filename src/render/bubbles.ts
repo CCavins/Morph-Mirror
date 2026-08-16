@@ -23,7 +23,7 @@ interface Bubble {
 }
 
 const RAYS = 16;
-const INNER = 0.52;
+const INNER = 0.97;
 const CHAINS: Array<[number, number, number]> = [
   [LM.leftShoulder, LM.leftElbow, LM.leftWrist],
   [LM.rightShoulder, LM.rightElbow, LM.rightWrist],
@@ -58,7 +58,7 @@ export class BubbleEngine {
 
   step(d: DrawCtx, dt: number, reduced: boolean): void {
     const { w, h, settings } = d;
-    const bodyN = reduced ? 12 : RAYS + 1;
+    const bodyN = RAYS;
     const ambientN = reduced ? 3 : 5;
     const size = 38 + settings.particleSize * 16;
     const follow = 0.055 + settings.attract * 0.045;
@@ -142,13 +142,14 @@ export class BubbleEngine {
     const bloom = settings.bloom;
     this.drawGoo(d, reduced);
 
-    const core = this.hullSmooth[RAYS];
-    if (core && this.ready) {
-      drawSpec(ctx, core.x - core.s * 10, core.y - core.s * 16, 54 + settings.particleSize * 8, colors.glowA, 0.18 + bloom * 0.14);
-    }
-
     for (const b of this.pool) {
-      if (!b.alive || b.kind === "body") continue;
+      if (!b.alive) continue;
+      if (b.kind === "body") {
+        if ((b.slot & 1) === 0) {
+          drawSpec(ctx, b.x, b.y, b.r * 0.9, colors.glowA, 0.2 + bloom * 0.14);
+        }
+        continue;
+      }
       const spd = Math.hypot(b.vx, b.vy);
       const stretch = 1 + Math.min(0.16, spd * 0.001);
       const ang = Math.atan2(b.vy, b.vx);
@@ -200,7 +201,7 @@ export class BubbleEngine {
 
   private updateHull(d: DrawCtx, dt: number): void {
     const fromMask = this.maskInterior(d);
-    const targets = fromMask.length === RAYS + 1 ? fromMask : this.jointInterior(d);
+    const targets = fromMask.length === RAYS ? fromMask : this.jointInterior(d);
     if (!targets.length) return;
 
     const ease = 1 - Math.pow(0.82, dt * 60);
@@ -284,10 +285,8 @@ export class BubbleEngine {
       const nx = clamp((this.cx + Math.cos(ang) * r * INNER) / mw, 0, 1);
       const ny = clamp((this.cy + Math.sin(ang) * r * INNER) / mh, 0, 1);
       const p = toScreen({ x: nx, y: ny, z: 0, vis: 1 }, d);
-      out.push({ x: p.x, y: p.y, s: 1.15 + clamp(r / Math.max(8, mean), 0.55, 1.55) * 0.45 });
+      out.push({ x: p.x, y: p.y, s: 0.9 + clamp(r / Math.max(8, mean), 0.55, 1.55) * 0.3 });
     }
-    const core = toScreen({ x: clamp(this.cx / mw, 0, 1), y: clamp(this.cy / mh, 0, 1), z: 0, vis: 1 }, d);
-    out.push({ x: core.x, y: core.y, s: 2.05 });
     return out;
   }
 
@@ -335,10 +334,9 @@ export class BubbleEngine {
       out.push({
         x: cx + Math.cos(ang) * r * INNER,
         y: cy + Math.sin(ang) * r * INNER,
-        s: 1.1 + clamp(r / mean, 0.6, 1.5) * 0.4,
+        s: 0.9 + clamp(r / mean, 0.6, 1.5) * 0.28,
       });
     }
-    out.push({ x: cx, y: cy, s: 1.95 });
     return out;
   }
 

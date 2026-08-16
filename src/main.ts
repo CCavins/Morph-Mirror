@@ -200,7 +200,8 @@ function loop(now: number): void {
   const frame = pose.frame;
 
   const energy = settings.audioReactive ? audio.sample() : 0;
-  const g = gestures.update(frame.poses, now, settings.gestures);
+  const gesturesActive = settings.gestures && !settings.frozen && settingsEl.hidden;
+  const g = gestures.update(frame.poses, now, gesturesActive);
   if (g) {
     if (g.name === "handsUp") changeMode(nextMode(settings.mode, 1));
     else if (g.name === "tpose") {
