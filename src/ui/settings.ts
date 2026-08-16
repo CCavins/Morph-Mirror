@@ -1,4 +1,5 @@
 import {
+  BACKGROUND_LABELS,
   BACKGROUND_MODES,
   EFFECT_LABELS,
   EFFECT_MODES,
@@ -71,13 +72,13 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
         ${slider("Attract", "attract", settings.attract, 0, 2, 0.05)}
         ${slider("Bloom", "bloom", settings.bloom, 0, 1.5, 0.05)}
         ${slider("Color cycle", "colorCycle", settings.colorCycle, 0, 3, 0.05)}
-        ${slider("Camera mix", "cameraMix", settings.cameraMix, 0, 1, 0.01)}
+        ${slider("Camera opacity", "cameraMix", settings.cameraMix, 0, 1, 0.01)}
       </section>
       <section class="group">
         <h3>Scene</h3>
         <label class="row">Background
           <select data-key="background">
-            ${BACKGROUND_MODES.map((b) => `<option value="${b}" ${settings.background === b ? "selected" : ""}>${b}</option>`).join("")}
+            ${BACKGROUND_MODES.map((b) => `<option value="${b}" ${settings.background === b ? "selected" : ""}>${BACKGROUND_LABELS[b]}</option>`).join("")}
           </select>
         </label>
         <label class="row">Model
@@ -105,6 +106,7 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
         <ul class="shortcuts">
           <li><b>S</b> or <b>,</b> toggle this panel · <b>Esc</b> close</li>
           <li><b>1–0</b> effects · <b>[ ]</b> palettes</li>
+          <li><b>B</b> background (solid / motion / camera)</li>
           <li><b>M</b> mirror · <b>R</b> rotate · <b>C</b> camera</li>
           <li><b>F</b> fullscreen · <b>H</b> HUD · <b>Space</b> freeze</li>
           <li><b>P</b> screenshot · <b>V</b> record · <b>L</b> copy look</li>

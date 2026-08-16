@@ -5,12 +5,13 @@ import { Compositor } from "./render/compositor";
 import {
   lookUrl,
   loadSettings,
+  nextBackground,
   nextMode,
   nextPalette,
   nextRotation,
   saveSettings,
 } from "./state";
-import { EFFECT_MODES, type Settings } from "./types";
+import { BACKGROUND_LABELS, EFFECT_MODES, type Settings } from "./types";
 import { mountSettings } from "./ui/settings";
 import { setHud, toast } from "./ui/hud";
 import { GestureDetector, applyGesture } from "./gestures";
@@ -275,6 +276,13 @@ window.addEventListener("keydown", (e) => {
     persist();
     ui.refresh();
     toast(settings.mirror ? "Mirror on" : "Mirror off");
+    return;
+  }
+  if (k === "b" || k === "B") {
+    settings.background = nextBackground(settings.background);
+    persist();
+    ui.refresh();
+    toast(BACKGROUND_LABELS[settings.background]);
     return;
   }
   if (k === "r" || k === "R") {

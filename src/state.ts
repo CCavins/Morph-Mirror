@@ -1,7 +1,9 @@
 import {
+  BACKGROUND_MODES,
   EFFECT_MODES,
   PALETTE_IDS,
   ROTATIONS,
+  type BackgroundMode,
   type EffectMode,
   type PaletteId,
   type Rotation,
@@ -31,8 +33,8 @@ export const DEFAULT_SETTINGS: Settings = {
   attract: 0.7,
   bloom: 0.7,
   colorCycle: 0,
-  cameraMix: 0.12,
-  background: "void",
+  cameraMix: 1,
+  background: "solid",
   showSkeleton: false,
   showHud: true,
   modelQuality: "lite",
@@ -125,7 +127,7 @@ export function applyUrlParams(settings: Settings): void {
   const mix = Number(p.get("mix"));
   if (Number.isFinite(mix)) settings.cameraMix = mix;
   const bg = p.get("bg");
-  if (bg === "void" || bg === "dim" || bg === "stars") settings.background = bg;
+  if (bg && isBackground(bg)) settings.background = bg;
   const quality = p.get("quality");
   if (quality === "lite" || quality === "full") settings.modelQuality = quality;
   const poses = Number(p.get("poses"));
@@ -157,37 +159,37 @@ export function applyLookPreset(settings: Settings, name: string): void {
     case "portrait":
       settings.mode = "liquid";
       settings.palette = "ice";
-      settings.cameraMix = 0.22;
+      settings.cameraMix = 0.55;
       settings.bloom = 0.8;
-      settings.background = "dim";
+      settings.background = "camera";
       settings.particleCount = 2800;
       break;
     case "rave":
       settings.mode = "particles";
       settings.palette = "plasma";
-      settings.cameraMix = 0.04;
+      settings.cameraMix = 1;
       settings.bloom = 1;
       settings.colorCycle = 1.4;
       settings.particleCount = 7000;
       settings.trailFade = 0.12;
-      settings.background = "void";
+      settings.background = "solid";
       break;
     case "installation":
       settings.mode = "aura";
       settings.palette = "aurora";
-      settings.cameraMix = 0;
+      settings.cameraMix = 1;
       settings.bloom = 0.85;
       settings.showHud = false;
-      settings.background = "stars";
+      settings.background = "motion";
       settings.particleCount = 5200;
       break;
     case "ghostly":
       settings.mode = "ghost";
       settings.palette = "ghost";
-      settings.cameraMix = 0.08;
+      settings.cameraMix = 1;
       settings.trailFade = 0.08;
       settings.bloom = 0.5;
-      settings.background = "void";
+      settings.background = "solid";
       break;
     default:
       break;
@@ -209,7 +211,27 @@ export function nextRotation(current: Rotation): Rotation {
   return ROTATIONS[(i + 1) % ROTATIONS.length];
 }
 
+export function nextBackground(current: BackgroundMode, dir: 1 | -1 = 1): BackgroundMode {
+  const i = BACKGROUND_MODES.indexOf(current);
+  return BACKGROUND_MODES[(i + dir + BACKGROUND_MODES.length) % BACKGROUND_MODES.length];
+}
+
+function isBackground(v: string): v is BackgroundMode {
+  return (BACKGROUND_MODES as readonly string[]).includes(v);
+}
+
+function migrateBackground(s: Settings): void {
+  const bg = s.background as string;
+  if (bg === "void") s.background = "solid";
+  else if (bg === "dim") {
+    s.background = "camera";
+    if (s.cameraMix < 0.25) s.cameraMix = 0.5;
+  } else if (bg === "stars") s.background = "motion";
+  else if (!isBackground(bg)) s.background = DEFAULT_SETTINGS.background;
+}
+
 function sanitize(s: Settings): void {
+  migrateBackground(s);
   if (!isEffect(s.mode)) s.mode = DEFAULT_SETTINGS.mode;
   if (!isPalette(s.palette)) s.palette = DEFAULT_SETTINGS.palette;
   if (!isRotation(s.rotation)) s.rotation = 0;

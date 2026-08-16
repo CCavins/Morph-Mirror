@@ -31,8 +31,14 @@ export type PaletteId = (typeof PALETTE_IDS)[number];
 export const LOOK_PRESETS = ["portrait", "rave", "installation", "ghostly"] as const;
 export type LookPreset = (typeof LOOK_PRESETS)[number];
 
-export const BACKGROUND_MODES = ["void", "dim", "stars"] as const;
+export const BACKGROUND_MODES = ["solid", "motion", "camera"] as const;
 export type BackgroundMode = (typeof BACKGROUND_MODES)[number];
+
+export const BACKGROUND_LABELS: Record<BackgroundMode, string> = {
+  solid: "Solid color",
+  motion: "Motion graphic",
+  camera: "Camera feed",
+};
 
 export const MODEL_QUALITIES = ["lite", "full"] as const;
 export type ModelQuality = (typeof MODEL_QUALITIES)[number];

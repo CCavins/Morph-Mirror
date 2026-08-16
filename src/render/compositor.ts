@@ -9,11 +9,11 @@ import {
   drawFramingGhost,
   drawGhost,
   drawMetaballs,
+  drawMotionBg,
   drawNeon,
   drawPixels,
   drawRibbons,
   drawSkeleton,
-  drawStars,
   landmarkAttractors,
   wristEmitters,
   type DrawCtx,
@@ -85,7 +85,8 @@ export class Compositor {
     this.frameCount++;
     const fade = clamp(settings.trailFade, 0.04, 0.6);
     const traily = settings.mode === "ribbons" || settings.mode === "ghost" || settings.mode === "embers" || settings.mode === "aurora";
-    if (traily) {
+    const showCamera = settings.background === "camera";
+    if (traily && !showCamera) {
       ctx.fillStyle = rgbCss(colors.background, fade);
       ctx.fillRect(0, 0, w, h);
       this.trail = 1;
@@ -95,13 +96,13 @@ export class Compositor {
       this.trail = 0;
     }
 
-    if (settings.background === "stars") {
-      drawStars(ctx, w, h, time, rgbCss(colors.glowA, 0.8));
+    if (settings.background === "motion") {
+      drawMotionBg(ctx, w, h, time, colors);
     }
 
-    if (settings.cameraMix > 0.01 && process.width > 1) {
+    if (showCamera && process.width > 1) {
       ctx.save();
-      ctx.globalAlpha = settings.cameraMix;
+      ctx.globalAlpha = clamp(settings.cameraMix, 0, 1);
       ctx.drawImage(process, cover.x, cover.y, process.width * cover.scale, process.height * cover.scale);
       ctx.restore();
     }
@@ -157,7 +158,10 @@ export class Compositor {
 
     if (settings.mode === "liquid") {
       if (this.liquid.ok) {
-        this.liquid.resize(Math.max(2, process.width), Math.max(2, process.height));
+        this.liquid.resize(
+          Math.max(2, Math.round(process.width * 2)),
+          Math.max(2, Math.round(process.height * 2)),
+        );
         this.liquid.render({
           mask: frame.mask,
           maskW: frame.maskWidth,
@@ -167,15 +171,15 @@ export class Compositor {
           secondary: n3(colors.secondary),
           glowA: n3(colors.glowA),
           glowB: n3(colors.glowB),
-          bg: n3(colors.background),
-          speed: 0.45 + settings.particleSpeed * 0.35 + audio * 0.6,
-          scale: 1.8 + settings.turbulence * 1.4,
-          bright: 0.9 + settings.bloom * 0.4,
-          filament: 1.1 + settings.attract,
-          core: 0.28 + audio * 0.4,
-          glow: 0.7 + settings.bloom * 0.5,
+          speed: 0.22 + settings.particleSpeed * 0.18 + audio * 0.25,
+          scale: 1.05 + settings.turbulence * 0.7,
+          bright: 0.95 + settings.bloom * 0.25,
+          filament: 0.85 + settings.attract * 0.4,
+          core: 0.22 + audio * 0.25,
+          glow: 0.85 + settings.bloom * 0.45,
           audio,
           bloom: settings.bloom,
+          warp: settings.turbulence,
         });
         ctx.drawImage(
           this.liquid.canvas,

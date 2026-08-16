@@ -331,6 +331,35 @@ export function drawFramingGhost(d: DrawCtx, alpha: number): void {
   ctx.restore();
 }
 
+export function drawMotionBg(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  time: number,
+  colors: ActiveColors,
+): void {
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  const orbs = 6;
+  for (let i = 0; i < orbs; i++) {
+    const x = w * (0.22 + 0.56 * (0.5 + 0.5 * Math.sin(time * (0.11 + i * 0.03) + i * 1.7)));
+    const y = h * (0.2 + 0.6 * (0.5 + 0.5 * Math.cos(time * (0.09 + i * 0.025) + i * 2.1)));
+    const r = Math.min(w, h) * (0.28 + 0.16 * Math.sin(time * 0.17 + i));
+    const grd = ctx.createRadialGradient(x, y, r * 0.05, x, y, r);
+    const col = i % 2 === 0 ? colors.primary : colors.secondary;
+    const glow = i % 2 === 0 ? colors.glowA : colors.glowB;
+    grd.addColorStop(0, rgbCss(glow, 0.22));
+    grd.addColorStop(0.45, rgbCss(col, 0.1));
+    grd.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  drawStars(ctx, w, h, time, rgbCss(colors.glowA, 0.55));
+}
+
 export function drawStars(ctx: CanvasRenderingContext2D, w: number, h: number, time: number, color: string): void {
   ctx.save();
   ctx.fillStyle = color;

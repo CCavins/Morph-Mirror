@@ -20,6 +20,7 @@ All tracking stays on your machine. The optional audio-reactive glow is off unti
 | `Esc` | Close settings |
 | `1`–`0` | Switch effects |
 | `[` `]` | Cycle color palettes |
+| `B` | Cycle background: solid color, motion graphic, camera |
 | `M` | Toggle mirror |
 | `R` | Rotate camera 90° (portrait webcams) |
 | `C` | Next camera |
