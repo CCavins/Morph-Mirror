@@ -333,9 +333,13 @@ export function drawMetaballs(d: DrawCtx): void {
 
 export function drawConnector(d: DrawCtx): void {
   if (d.frame.poses.length < 2) return;
-  const a = midHip(d.frame.poses[0], d);
-  const b = midHip(d.frame.poses[1], d);
+  const bodies = d.frame.poses.filter(isFullBody);
+  if (bodies.length < 2) return;
+  const a = midHip(bodies[0], d);
+  const b = midHip(bodies[1], d);
   if (!a || !b) return;
+  const span = Math.hypot(a.x - b.x, a.y - b.y);
+  if (span < Math.min(d.w, d.h) * 0.18) return;
   const { ctx, colors } = d;
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
@@ -350,6 +354,16 @@ export function drawConnector(d: DrawCtx): void {
   ctx.quadraticCurveTo(mx, my, b.x, b.y);
   ctx.stroke();
   ctx.restore();
+}
+
+function isFullBody(pose: BodyPose): boolean {
+  const ls = pose.landmarks[LM.leftShoulder];
+  const rs = pose.landmarks[LM.rightShoulder];
+  const lh = pose.landmarks[LM.leftHip];
+  const rh = pose.landmarks[LM.rightHip];
+  const shoulders = visible(ls, 0.45) && visible(rs, 0.45) && Math.hypot(ls.x - rs.x, ls.y - rs.y) > 0.07;
+  const hips = visible(lh, 0.35) && visible(rh, 0.35) && Math.hypot(lh.x - rh.x, lh.y - rh.y) > 0.05;
+  return shoulders && hips;
 }
 
 function midHip(pose: BodyPose, d: DrawCtx): { x: number; y: number } | null {
@@ -368,36 +382,6 @@ function midHip(pose: BodyPose, d: DrawCtx): { x: number; y: number } | null {
     return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   }
   return null;
-}
-
-export function drawFramingGhost(d: DrawCtx, alpha: number): void {
-  if (alpha < 0.02) return;
-  const { ctx, w, h, colors } = d;
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.strokeStyle = rgbCss(colors.glowA, 0.55);
-  ctx.lineWidth = 2;
-  ctx.setLineDash([8, 10]);
-  const cx = w / 2;
-  const cy = h * 0.48;
-  const s = Math.min(w, h) * 0.28;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy - s * 0.72, s * 0.18, s * 0.22, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - s * 0.5);
-  ctx.quadraticCurveTo(cx, cy + s * 0.1, cx, cy + s * 0.35);
-  ctx.moveTo(cx, cy - s * 0.28);
-  ctx.lineTo(cx - s * 0.55, cy + s * 0.05);
-  ctx.moveTo(cx, cy - s * 0.28);
-  ctx.lineTo(cx + s * 0.55, cy + s * 0.05);
-  ctx.moveTo(cx, cy + s * 0.35);
-  ctx.lineTo(cx - s * 0.22, cy + s * 0.95);
-  ctx.moveTo(cx, cy + s * 0.35);
-  ctx.lineTo(cx + s * 0.22, cy + s * 0.95);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.restore();
 }
 
 export function drawMotionBg(

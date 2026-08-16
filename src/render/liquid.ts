@@ -438,7 +438,15 @@ export class LiquidRenderer {
         }
       }
     } else if (this.smoothMask) {
-      for (let i = 0; i < this.smoothMask.length; i++) this.smoothMask[i] *= 0.88;
+      let max = 0;
+      for (let i = 0; i < this.smoothMask.length; i++) {
+        this.smoothMask[i] *= 0.55;
+        if (this.smoothMask[i] > max) max = this.smoothMask[i];
+      }
+      if (max < 0.04) {
+        this.smoothMask.fill(0);
+        this.maskMotion = 0;
+      }
     }
     if (this.smoothMask && this.lastMaskW > 0) {
       const n = this.smoothMask.length;

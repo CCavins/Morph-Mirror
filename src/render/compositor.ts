@@ -7,7 +7,6 @@ import { ParticleEngine, sampleEdgeGrid, sampleMaskGrid, type Attractor } from "
 import {
   drawConnector,
   drawConstellation,
-  drawFramingGhost,
   drawMetaballs,
   drawMotionBg,
   drawNeon,
@@ -32,7 +31,6 @@ export class Compositor {
   private attractors: Attractor[] = [];
   private frameCount = 0;
   private trail = 0;
-  ghostAlpha = 1;
   fps = 60;
   private flow: [number, number] = [0, 0];
   private center: [number, number] = [0.5, 0.5];
@@ -246,13 +244,6 @@ export class Compositor {
     if (settings.showSkeleton && settings.mode !== "neon" && settings.mode !== "constellation") {
       drawSkeleton(d, 0.7);
     }
-
-    if (frame.hasPerson) {
-      this.ghostAlpha = 0;
-    } else {
-      this.ghostAlpha = lerpToward(this.ghostAlpha, 1, dt * 1.4);
-    }
-    drawFramingGhost(d, this.ghostAlpha);
 
     return colors;
   }

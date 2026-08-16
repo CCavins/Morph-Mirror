@@ -158,17 +158,19 @@ export class PoseTracker {
     try {
       const raw = (result.landmarks ?? []).map(toLandmarks);
       const smoothed = this.smoother.apply(raw);
-      const poses: BodyPose[] = smoothed.map((landmarks, i) => {
-        const prev = this.prevPoses[i] ?? landmarks.map((l) => ({ ...l }));
-        return { landmarks, prev };
-      });
-      this.prevPoses = smoothed.map((p) => p.map((l) => ({ ...l })));
+      const poses: BodyPose[] = smoothed
+        .filter(isBodyPose)
+        .map((landmarks, i) => {
+          const prev = this.prevPoses[i] ?? landmarks.map((l) => ({ ...l }));
+          return { landmarks, prev };
+        });
+      this.prevPoses = poses.map((p) => p.landmarks.map((l) => ({ ...l })));
 
       let mask: Float32Array | null = copyMask ? null : this.last.mask;
       let maskWidth = copyMask ? 0 : this.last.maskWidth;
       let maskHeight = copyMask ? 0 : this.last.maskHeight;
       const seg = masks[0];
-      if (seg && copyMask) {
+      if (seg && copyMask && poses.length > 0) {
         maskWidth = seg.width;
         maskHeight = seg.height;
         const data = seg.getAsFloat32Array();
@@ -177,11 +179,15 @@ export class PoseTracker {
         }
         this.maskScratch.set(data);
         mask = this.maskScratch;
+        stampPoseLimbs(mask, maskWidth, maskHeight, poses);
       }
 
-      if (refineHands && copyMask && mask && maskWidth > 8) {
+      if (refineHands && copyMask && mask && maskWidth > 8 && poses.length > 0) {
         this.updateHands(source, timestampMs, poses);
-        stampHands(mask, maskWidth, maskHeight, this.lastHands);
+        stampHands(mask, maskWidth, maskHeight, this.lastHands, poses);
+      } else if (!poses.length) {
+        this.lastHands = [];
+        this.handMiss = 0;
       }
 
       this.last = {
@@ -252,7 +258,7 @@ function personPresent(
   mw: number,
   mh: number,
 ): boolean {
-  if (poses.some((p) => p.landmarks.some((l) => l.vis > 0.45))) return true;
+  if (poses.length > 0) return true;
   if (!mask || mw < 8 || mh < 8) return false;
   let hits = 0;
   const step = Math.max(2, (Math.min(mw, mh) / 24) | 0);
@@ -268,11 +274,78 @@ function personPresent(
   return false;
 }
 
-function stampHands(mask: Float32Array, mw: number, mh: number, hands: Landmark[][]): void {
+function isBodyPose(landmarks: Landmark[]): boolean {
+  if (landmarks.length < 25) return false;
+  const ls = landmarks[LM.leftShoulder];
+  const rs = landmarks[LM.rightShoulder];
+  const lh = landmarks[LM.leftHip];
+  const rh = landmarks[LM.rightHip];
+  const shoulders = visible(ls, 0.4) && visible(rs, 0.4) && Math.hypot(ls.x - rs.x, ls.y - rs.y) > 0.06;
+  const hips = visible(lh, 0.3) && visible(rh, 0.3);
+  return shoulders || (hips && (visible(ls, 0.35) || visible(rs, 0.35)));
+}
+
+const ARM_CHAINS: Array<[number, number, number]> = [
+  [LM.leftShoulder, LM.leftElbow, LM.leftWrist],
+  [LM.rightShoulder, LM.rightElbow, LM.rightWrist],
+];
+
+function stampPoseLimbs(
+  mask: Float32Array,
+  mw: number,
+  mh: number,
+  poses: BodyPose[],
+): void {
+  for (const pose of poses) {
+    const ls = pose.landmarks[LM.leftShoulder];
+    const rs = pose.landmarks[LM.rightShoulder];
+    const shoulder = visible(ls, 0.35) && visible(rs, 0.35)
+      ? Math.hypot((ls.x - rs.x) * mw, (ls.y - rs.y) * mh)
+      : Math.min(mw, mh) * 0.12;
+    const thick = Math.max(3.5, Math.min(14, shoulder * 0.22));
+    for (const [a, b, c] of ARM_CHAINS) {
+      const la = pose.landmarks[a];
+      const lb = pose.landmarks[b];
+      const lc = pose.landmarks[c];
+      if (visible(la, 0.35) && visible(lb, 0.35)) {
+        stampCapsule(mask, mw, mh, la.x * mw, la.y * mh, lb.x * mw, lb.y * mh, thick);
+      }
+      if (visible(lb, 0.35) && visible(lc, 0.35)) {
+        stampCapsule(mask, mw, mh, lb.x * mw, lb.y * mh, lc.x * mw, lc.y * mh, thick * 0.85);
+        stampDisc(mask, mw, mh, lc.x * mw, lc.y * mh, thick * 0.9);
+      }
+    }
+  }
+}
+
+function stampHands(
+  mask: Float32Array,
+  mw: number,
+  mh: number,
+  hands: Landmark[][],
+  poses: BodyPose[],
+): void {
+  const wrists: Array<{ x: number; y: number }> = [];
+  for (const pose of poses) {
+    for (const idx of [LM.leftWrist, LM.rightWrist]) {
+      const lm = pose.landmarks[idx];
+      if (visible(lm, 0.35)) wrists.push({ x: lm.x * mw, y: lm.y * mh });
+    }
+  }
+  if (!wrists.length) return;
+
   for (const hand of hands) {
     if (hand.length < 21) continue;
     const wx = hand[0].x * mw;
     const wy = hand[0].y * mh;
+    let near = false;
+    for (const w of wrists) {
+      if (Math.hypot(wx - w.x, wy - w.y) < Math.min(mw, mh) * 0.22) {
+        near = true;
+        break;
+      }
+    }
+    if (!near) continue;
     const mx = hand[9].x * mw;
     const my = hand[9].y * mh;
     const palm = Math.hypot(mx - wx, my - wy);
