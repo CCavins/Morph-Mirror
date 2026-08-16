@@ -1,9 +1,9 @@
 import { LM, VIS_MIN, type BodyPose, type EffectMode, type PaletteId } from "./types";
 import { dist } from "./math";
 import { visible } from "./pose";
-import { nextMode, nextPalette } from "./state";
+import { nextPalette } from "./state";
 
-export type GestureName = "handsUp" | "handsTogether" | "tpose";
+export type GestureName = "handsTogether" | "tpose";
 
 export interface GestureEvent {
   name: GestureName;
@@ -23,7 +23,11 @@ export class GestureDetector {
   }
 
   update(poses: BodyPose[], now: number, enabled: boolean): GestureEvent | null {
-    if (!enabled || now - this.lastFire < COOLDOWN) return null;
+    if (!enabled) {
+      this.hold.clear();
+      return null;
+    }
+    if (now - this.lastFire < COOLDOWN) return null;
     const pose = poses[0];
     if (!pose) {
       this.hold.clear();
@@ -48,17 +52,14 @@ export class GestureDetector {
 
     const shoulderSpan = Math.max(0.08, dist(ls.x, ls.y, rs.x, rs.y));
     const headY = visible(nose, VIS_MIN) ? nose.y : Math.min(ls.y, rs.y) - 0.14;
-    const handsUp =
-      lw.y < headY - 0.03 && rw.y < headY - 0.03 &&
-      lw.y < le.y - 0.02 && rw.y < re.y - 0.02;
     const together =
       dist(lw.x, lw.y, rw.x, rw.y) < shoulderSpan * 0.4 &&
       lw.y > headY && rw.y > headY;
     const wristsLevel = Math.abs(lw.y - ls.y) < 0.09 && Math.abs(rw.y - rs.y) < 0.09;
     const armsOut = lw.x < ls.x - shoulderSpan * 0.7 && rw.x > rs.x + shoulderSpan * 0.7;
-    const tpose = wristsLevel && armsOut && !handsUp;
+    const tpose = wristsLevel && armsOut;
 
-    const candidate: GestureName | null = together ? "handsTogether" : handsUp ? "handsUp" : tpose ? "tpose" : null;
+    const candidate: GestureName | null = together ? "handsTogether" : tpose ? "tpose" : null;
     if (!candidate) {
       this.hold.clear();
       return null;
@@ -79,7 +80,6 @@ export function applyGesture(
   mode: EffectMode,
   palette: PaletteId,
 ): { mode: EffectMode; palette: PaletteId; burst: boolean } {
-  if (name === "handsUp") return { mode: nextMode(mode, 1), palette, burst: false };
   if (name === "tpose") return { mode, palette: nextPalette(palette, 1), burst: false };
   return { mode, palette, burst: true };
 }

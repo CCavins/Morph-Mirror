@@ -34,7 +34,7 @@ Each effect remembers its own sliders, palette, and colors in localStorage. Sett
 | `V` | Record / stop clip |
 | `L` | Copy a shareable look URL |
 
-Gestures (on by default): both hands up → next effect, hands together → burst, T-pose → next palette.
+Gestures (on by default): hands together → burst, T-pose → next palette.
 
 In **Scene**, **Auto-rotate effects** (off by default) walks through every effect on a timer you set.
 

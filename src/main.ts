@@ -203,15 +203,14 @@ function loop(now: number): void {
   const gesturesActive = settings.gestures && !settings.frozen && settingsEl.hidden;
   const g = gestures.update(frame.poses, now, gesturesActive);
   if (g) {
-    if (g.name === "handsUp") changeMode(nextMode(settings.mode, 1));
-    else if (g.name === "tpose") {
+    if (g.name === "tpose") {
       settings.palette = nextPalette(settings.palette, 1);
       persist();
       refreshUi();
     } else {
       burstQueued = true;
     }
-    toast(g.name === "handsUp" ? "Next effect" : g.name === "tpose" ? "Next palette" : "Burst");
+    toast(g.name === "tpose" ? "Next palette" : "Burst");
   }
 
   if (burstQueued) {

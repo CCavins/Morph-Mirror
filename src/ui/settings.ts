@@ -259,7 +259,7 @@ export function mountSettings(root: HTMLElement, settings: Settings, handlers: {
           <li><b>M</b> mirror · <b>R</b> rotate · <b>C</b> camera</li>
           <li><b>F</b> fullscreen · <b>H</b> HUD · <b>Space</b> freeze</li>
           <li><b>P</b> screenshot · <b>V</b> record · <b>L</b> copy look</li>
-          <li>Hands up: next effect · Hands together: burst · T-pose: next palette</li>
+          <li>Hands together: burst · T-pose: next palette</li>
         </ul>
       </section>
     `;
