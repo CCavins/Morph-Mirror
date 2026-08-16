@@ -56,6 +56,13 @@ uniform float u_glow;
 uniform float u_audio;
 uniform float u_bloom;
 uniform float u_warp;
+uniform vec2 u_flow;
+uniform vec2 u_center;
+uniform vec2 u_handL;
+uniform vec2 u_handR;
+uniform vec2 u_handLv;
+uniform vec2 u_handRv;
+uniform vec3 u_light;
 
 float hash(vec3 p){
   p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -85,51 +92,101 @@ float vnoise(vec3 p){
 float fbm(vec3 p){
   float a = 0.5;
   float s = 0.0;
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 4; i++) {
     s += vnoise(p) * a;
-    p = p * 2.02 + vec3(0.17, 0.31, 0.11);
+    p = p * 2.03 + vec3(0.17, 0.31, 0.11);
     a *= 0.5;
   }
   return s;
 }
 
-float sampleBody(vec2 uv){
+float dens(vec2 uv){
   return texture(u_mask, uv).r;
+}
+
+vec2 localFlow(vec2 uv){
+  vec2 dL = uv - u_handL;
+  vec2 dR = uv - u_handR;
+  float wL = exp(-dot(dL, dL) * 22.0);
+  float wR = exp(-dot(dR, dR) * 22.0);
+  return u_flow + u_handLv * wL * 1.8 + u_handRv * wR * 1.8;
 }
 
 void main(){
   vec2 uv = v_uv;
   float t = u_time * u_speed;
+  vec2 flow = localFlow(uv);
+  float flowMag = length(flow);
 
-  vec3 wp = vec3(uv * 1.65, t * 0.22);
+  vec3 wp = vec3(uv * 1.4 - flow * 6.0, t * 0.28);
   vec2 warp = vec2(fbm(wp), fbm(wp + vec3(5.2, 1.7, 0.4))) * 2.0 - 1.0;
-  vec2 suv = uv + warp * (0.018 + u_warp * 0.028);
+  vec2 suv = uv - flow * (4.5 + flowMag * 18.0);
+  suv += warp * (0.012 + u_warp * 0.02 + flowMag * 0.08);
 
-  float d = sampleBody(suv);
-  d = max(d, sampleBody(suv + warp * 0.012) * 0.55);
+  float d = dens(suv);
+  vec2 px = 1.0 / u_resolution;
+  float aspect = u_resolution.x / max(u_resolution.y, 1.0);
+  float dL = dens(suv - vec2(px.x * 2.4, 0.0));
+  float dR = dens(suv + vec2(px.x * 2.4, 0.0));
+  float dU = dens(suv - vec2(0.0, px.y * 2.4));
+  float dDn = dens(suv + vec2(0.0, px.y * 2.4));
 
-  float inside = smoothstep(0.12, 0.48, d);
-  float halo = smoothstep(0.03, 0.26, d) * (1.0 - smoothstep(0.22, 0.62, d));
-  float rim = smoothstep(0.16, 0.34, d) * (1.0 - smoothstep(0.34, 0.58, d));
+  vec3 N = normalize(vec3(
+    (dL - dR) * 4.2 * aspect,
+    (dU - dDn) * 4.2,
+    0.28 + d * 0.85
+  ));
+  vec3 V = vec3(0.0, 0.0, 1.0);
+  vec3 L = normalize(u_light + vec3(-flow.x, -flow.y, 0.0) * 7.0);
+  vec3 H = normalize(L + V);
+  float ndl = max(0.0, dot(N, L));
+  float spec = pow(max(0.0, dot(N, H)), 42.0 + u_bloom * 40.0);
+  float fres = pow(1.0 - max(0.0, dot(N, V)), 2.4);
+  float rim = fres * smoothstep(0.08, 0.42, d);
 
-  vec3 lp = vec3(suv * u_scale, t * 0.18);
-  lp.xy += vec2(fbm(lp), fbm(lp + 3.1)) * 0.55;
-  float field = fbm(lp);
-  float field2 = fbm(lp * 1.65 + field);
-  float swirl = mix(field, field2, 0.45);
-  float filaments = smoothstep(0.38, 0.58, swirl) * smoothstep(0.86, 0.6, swirl);
+  if (d < 0.035) {
+    float halo = smoothstep(0.0, 0.08, d) * 0.35;
+    vec3 g = mix(u_glowA, u_glowB, 0.5) * halo * u_glow;
+    outColor = vec4(g * halo, halo);
+    return;
+  }
 
-  vec3 liquid = mix(u_primary, u_secondary, swirl);
-  liquid = mix(liquid, mix(u_glowA, u_glowB, field2), filaments * (0.28 + u_filament * 0.18));
-  liquid *= u_bright * (0.88 + u_audio * 0.35);
-  liquid += u_glowA * u_core * inside * (0.16 + 0.14 * swirl);
+  vec3 accum = vec3(0.0);
+  float trans = 1.0;
+  vec3 rp = vec3(suv, 0.0);
+  for (int i = 0; i < 5; i++) {
+    float di = dens(rp.xy);
+    if (di > 0.04 && trans > 0.03) {
+      vec3 q = vec3((rp.xy - u_center) * u_scale - flow * (8.0 + float(i) * 3.0), t * 0.32 + rp.z);
+      q.xy += vec2(fbm(q), fbm(q + 2.7)) * 0.35;
+      float n = fbm(q);
+      float n2 = fbm(q * 1.55 + n);
+      float swirl = mix(n, n2, 0.4);
+      float fil = smoothstep(0.4, 0.62, swirl) * smoothstep(0.88, 0.58, swirl);
+      vec3 albedo = mix(u_primary, u_secondary, swirl);
+      albedo = mix(albedo, mix(u_glowA, u_glowB, n2), fil * (0.35 + u_filament * 0.25));
+      float a = di * 0.3 * trans;
+      accum += albedo * a * (1.15 - float(i) * 0.12);
+      trans *= 1.0 - di * 0.24;
+    }
+    rp.xy += flow * 0.07;
+    rp.z += 0.12;
+  }
 
-  vec3 glow = mix(u_glowA, u_glowB, 0.5 + 0.5 * sin(t * 0.7 + swirl * 3.0));
-  glow *= (halo * 0.95 + rim * 0.55) * u_glow * (0.85 + u_bloom * 0.5 + u_audio * 0.35);
+  float inside = smoothstep(0.1, 0.5, d);
+  float thick = smoothstep(0.18, 0.78, d);
+  vec3 vol = accum * u_bright * (0.9 + u_audio * 0.35);
+  vol *= 0.32 + ndl * 0.85 + thick * 0.18;
+  vol += u_glowA * u_core * thick * (0.12 + ndl * 0.18);
+  vec3 specCol = mix(vec3(1.0), u_glowA, 0.35);
+  vol += specCol * spec * (0.45 + u_bloom * 0.55) * inside;
+  vol += mix(u_glowA, u_glowB, fres) * rim * u_glow * (0.7 + u_bloom * 0.5);
 
-  float alpha = clamp(inside * 0.9 + halo * 0.7 + rim * 0.25, 0.0, 1.0);
-  vec3 col = liquid * inside + glow;
-  outColor = vec4(col * alpha, alpha);
+  float halo = smoothstep(0.04, 0.28, d) * (1.0 - smoothstep(0.28, 0.7, d));
+  vol += mix(u_glowA, u_glowB, 0.45) * halo * u_glow * 0.55;
+
+  float alpha = clamp(inside * 0.94 + halo * 0.55 + rim * 0.2, 0.0, 1.0);
+  outColor = vec4(vol * alpha, alpha);
 }`;
 
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
@@ -178,6 +235,7 @@ export class LiquidRenderer {
   private smoothMask: Float32Array | null = null;
   private lastMaskW = 0;
   private lastMaskH = 0;
+  private advectScratch: Float32Array | null = null;
   private liquidUniforms: Record<string, WebGLUniformLocation | null> = {};
   private blurUniforms: Record<string, WebGLUniformLocation | null> = {};
   ok = false;
@@ -226,6 +284,7 @@ export class LiquidRenderer {
       "u_primary", "u_secondary", "u_glowA", "u_glowB",
       "u_speed", "u_scale", "u_bright", "u_filament", "u_core",
       "u_glow", "u_audio", "u_bloom", "u_warp",
+      "u_flow", "u_center", "u_handL", "u_handR", "u_handLv", "u_handRv", "u_light",
     ]) {
       this.liquidUniforms[n] = gl.getUniformLocation(this.liquidProg, n);
     }
@@ -283,6 +342,13 @@ export class LiquidRenderer {
     audio: number;
     bloom: number;
     warp: number;
+    flow: [number, number];
+    center: [number, number];
+    handL: [number, number];
+    handR: [number, number];
+    handLv: [number, number];
+    handRv: [number, number];
+    light: [number, number, number];
   }): void {
     const gl = this.gl;
     const liquidProg = this.liquidProg;
@@ -302,9 +368,25 @@ export class LiquidRenderer {
       if (!this.smoothMask || this.smoothMask.length !== n) {
         this.smoothMask = new Float32Array(n);
         this.smoothMask.set(opts.mask);
+        this.advectScratch = new Float32Array(n);
       } else {
         const prev = this.smoothMask;
-        for (let i = 0; i < n; i++) prev[i] = prev[i] * 0.78 + opts.mask[i] * 0.22;
+        const next = this.advectScratch ?? new Float32Array(n);
+        this.advectScratch = next;
+        const mw = opts.maskW;
+        const mh = opts.maskH;
+        const ax = opts.flow[0] * mw * 2.8;
+        const ay = -opts.flow[1] * mh * 2.8;
+        for (let y = 0; y < mh; y++) {
+          for (let x = 0; x < mw; x++) {
+            const i = y * mw + x;
+            const sx = x - ax;
+            const sy = y - ay;
+            const smeared = bilinear(prev, mw, mh, sx, sy);
+            next[i] = smeared * 0.62 + opts.mask[i] * 0.38;
+          }
+        }
+        prev.set(next);
       }
     } else if (this.smoothMask) {
       for (let i = 0; i < this.smoothMask.length; i++) this.smoothMask[i] *= 0.88;
@@ -330,10 +412,8 @@ export class LiquidRenderer {
       );
     }
 
-    this.blurPass(gl, this.maskTex, this.ping, 1 / w, 0, 1, 3.4);
-    this.blurPass(gl, this.ping.tex, this.pong, 0, 1 / h, 0, 3.4);
-    this.blurPass(gl, this.pong.tex, this.ping, 1 / w, 0, 0, 2.2);
-    this.blurPass(gl, this.ping.tex, this.pong, 0, 1 / h, 0, 2.2);
+    this.blurPass(gl, this.maskTex, this.ping, 1 / w, 0, 1, 2.6);
+    this.blurPass(gl, this.ping.tex, this.pong, 0, 1 / h, 0, 2.6);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, w, h);
@@ -359,6 +439,13 @@ export class LiquidRenderer {
     gl.uniform1f(u.u_audio, opts.audio);
     gl.uniform1f(u.u_bloom, opts.bloom);
     gl.uniform1f(u.u_warp, opts.warp);
+    gl.uniform2f(u.u_flow, opts.flow[0], opts.flow[1]);
+    gl.uniform2f(u.u_center, opts.center[0], opts.center[1]);
+    gl.uniform2f(u.u_handL, opts.handL[0], opts.handL[1]);
+    gl.uniform2f(u.u_handR, opts.handR[0], opts.handR[1]);
+    gl.uniform2f(u.u_handLv, opts.handLv[0], opts.handLv[1]);
+    gl.uniform2f(u.u_handRv, opts.handRv[0], opts.handRv[1]);
+    gl.uniform3f(u.u_light, opts.light[0], opts.light[1], opts.light[2]);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -385,4 +472,20 @@ export class LiquidRenderer {
     gl.uniform1f(this.blurUniforms.u_spread, spread);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
+}
+
+function bilinear(m: Float32Array, w: number, h: number, x: number, y: number): number {
+  const x0 = Math.max(0, Math.min(w - 1.001, x));
+  const y0 = Math.max(0, Math.min(h - 1.001, y));
+  const ix = Math.floor(x0);
+  const iy = Math.floor(y0);
+  const fx = x0 - ix;
+  const fy = y0 - iy;
+  const x1 = Math.min(w - 1, ix + 1);
+  const y1 = Math.min(h - 1, iy + 1);
+  const a = m[iy * w + ix];
+  const b = m[iy * w + x1];
+  const c = m[y1 * w + ix];
+  const d = m[y1 * w + x1];
+  return a * (1 - fx) * (1 - fy) + b * fx * (1 - fy) + c * (1 - fx) * fy + d * fx * fy;
 }

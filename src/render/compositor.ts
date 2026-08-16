@@ -1,4 +1,5 @@
 import type { PoseFrame, Settings } from "../types";
+import { LM, VIS_MIN } from "../types";
 import { clamp, coverFit, mapCover, rgbCss } from "../math";
 import { resolveColors, type ActiveColors } from "./palettes";
 import { LiquidRenderer } from "./liquid";
@@ -18,6 +19,7 @@ import {
   wristEmitters,
   type DrawCtx,
 } from "./effects";
+import { visible } from "../pose";
 
 export class Compositor {
   readonly view: HTMLCanvasElement;
@@ -29,6 +31,12 @@ export class Compositor {
   private trail = 0;
   ghostAlpha = 1;
   fps = 60;
+  private flow: [number, number] = [0, 0];
+  private center: [number, number] = [0.5, 0.5];
+  private handL: [number, number] = [0.35, 0.45];
+  private handR: [number, number] = [0.65, 0.45];
+  private handLv: [number, number] = [0, 0];
+  private handRv: [number, number] = [0, 0];
 
   constructor(view: HTMLCanvasElement) {
     this.view = view;
@@ -83,6 +91,7 @@ export class Compositor {
     };
 
     this.frameCount++;
+    this.updateMotion(frame);
     const fade = clamp(settings.trailFade, 0.04, 0.6);
     const traily = settings.mode === "ribbons" || settings.mode === "ghost" || settings.mode === "embers" || settings.mode === "aurora";
     const showCamera = settings.background === "camera";
@@ -176,10 +185,21 @@ export class Compositor {
           bright: 0.95 + settings.bloom * 0.25,
           filament: 0.85 + settings.attract * 0.4,
           core: 0.22 + audio * 0.25,
-          glow: 0.85 + settings.bloom * 0.45,
+          glow: 0.9 + settings.bloom * 0.45,
           audio,
           bloom: settings.bloom,
           warp: settings.turbulence,
+          flow: this.flow,
+          center: this.center,
+          handL: this.handL,
+          handR: this.handR,
+          handLv: this.handLv,
+          handRv: this.handRv,
+          light: [
+            0.42 - this.flow[0] * 14,
+            0.22 - this.flow[1] * 14,
+            0.82,
+          ],
         });
         ctx.drawImage(
           this.liquid.canvas,
@@ -215,6 +235,76 @@ export class Compositor {
     drawFramingGhost(d, this.ghostAlpha);
 
     return colors;
+  }
+
+  private updateMotion(frame: PoseFrame): void {
+    const pose = frame.poses[0];
+    if (!pose?.landmarks.length) {
+      this.flow[0] *= 0.88;
+      this.flow[1] *= 0.88;
+      this.handLv[0] *= 0.85;
+      this.handLv[1] *= 0.85;
+      this.handRv[0] *= 0.85;
+      this.handRv[1] *= 0.85;
+      return;
+    }
+    let vx = 0;
+    let vy = 0;
+    let cx = 0;
+    let cy = 0;
+    let n = 0;
+    for (let i = 0; i < pose.landmarks.length; i++) {
+      const lm = pose.landmarks[i];
+      if (!visible(lm, VIS_MIN)) continue;
+      cx += lm.x;
+      cy += lm.y;
+      n += 1;
+      const prev = pose.prev[i];
+      if (prev) {
+        vx += lm.x - prev.x;
+        vy += lm.y - prev.y;
+      }
+    }
+    if (n > 0) {
+      cx /= n;
+      cy /= n;
+      vx /= n;
+      vy /= n;
+      this.center[0] = lerpToward(this.center[0], cx, 0.35);
+      this.center[1] = lerpToward(this.center[1], 1 - cy, 0.35);
+      this.flow[0] = clamp(this.flow[0] * 0.72 + vx * 0.28, -0.12, 0.12);
+      this.flow[1] = clamp(this.flow[1] * 0.72 + -vy * 0.28, -0.12, 0.12);
+    } else {
+      this.flow[0] *= 0.88;
+      this.flow[1] *= 0.88;
+    }
+
+    const lw = pose.landmarks[LM.leftWrist];
+    const rw = pose.landmarks[LM.rightWrist];
+    const lp = pose.prev[LM.leftWrist];
+    const rp = pose.prev[LM.rightWrist];
+    if (visible(lw, VIS_MIN)) {
+      this.handL[0] = lw.x;
+      this.handL[1] = 1 - lw.y;
+      if (lp) {
+        this.handLv[0] = this.handLv[0] * 0.6 + (lw.x - lp.x) * 0.4;
+        this.handLv[1] = this.handLv[1] * 0.6 + -(lw.y - lp.y) * 0.4;
+      }
+    } else {
+      this.handLv[0] *= 0.85;
+      this.handLv[1] *= 0.85;
+    }
+    if (visible(rw, VIS_MIN)) {
+      this.handR[0] = rw.x;
+      this.handR[1] = 1 - rw.y;
+      if (rp) {
+        this.handRv[0] = this.handRv[0] * 0.6 + (rw.x - rp.x) * 0.4;
+        this.handRv[1] = this.handRv[1] * 0.6 + -(rw.y - rp.y) * 0.4;
+      }
+    } else {
+      this.handRv[0] *= 0.85;
+      this.handRv[1] *= 0.85;
+    }
   }
 }
 
